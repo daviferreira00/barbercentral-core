@@ -74,6 +74,12 @@ func (s *authService) Login(ctx context.Context, emailVal, password string) (*Lo
 		if cUser.Status != "active" {
 			return nil, ErrInactiveUser
 		}
+		// Verificar se a barbearia está bloqueada
+		status, err := s.repo.GetClientStatus(ctx, cUser.ClientID)
+		if err == nil && status == "blocked" {
+			return nil, errors.New("sua barbearia está suspensa ou bloqueada pelo administrador")
+		}
+
 		passwordHash = cUser.PasswordHash
 		user = &Usuario{
 			ID:       cUser.ID,
@@ -111,6 +117,14 @@ func (s *authService) ValidateToken(tokenStr string) (*middleware.Claims, error)
 	if err != nil || !token.Valid {
 		return nil, ErrInvalidToken
 	}
+
+	if claims.Role != "admin" && claims.ClientID != "" {
+		status, err := s.repo.GetClientStatus(context.Background(), claims.ClientID)
+		if err == nil && status == "blocked" {
+			return nil, errors.New("client_blocked")
+		}
+	}
+
 	return claims, nil
 }
 
@@ -347,6 +361,13 @@ func (s *authService) VerifyMagicLink(ctx context.Context, tokenStr string) (*Lo
 		if cUser.Status != "active" {
 			return nil, ErrInactiveUser
 		}
+
+		// Verificar se a barbearia está bloqueada
+		status, err := s.repo.GetClientStatus(ctx, cUser.ClientID)
+		if err == nil && status == "blocked" {
+			return nil, errors.New("sua barbearia está suspensa ou bloqueada pelo administrador")
+		}
+
 		user = &Usuario{
 			ID:       cUser.ID,
 			ClientID: cUser.ClientID,

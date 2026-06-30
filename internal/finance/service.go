@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"barbercentral-core/internal/loyalty"
 )
 
 type Service interface {
@@ -30,11 +32,15 @@ type Service interface {
 }
 
 type service struct {
-	repo Repository
+	repo           Repository
+	loyaltyService loyalty.Service
 }
 
-func NewService(repo Repository) Service {
-	return &service{repo: repo}
+func NewService(repo Repository, loyaltyService loyalty.Service) Service {
+	return &service{
+		repo:           repo,
+		loyaltyService: loyaltyService,
+	}
 }
 
 func (s *service) GetByID(ctx context.Context, clientID, id string) (*CashRegister, error) {
@@ -216,7 +222,18 @@ func (s *service) RegisterPayment(ctx context.Context, clientID, userID, appID s
 		CreatedAt:            time.Now(),
 	}
 
-	return s.repo.CreateTransaction(ctx, tx)
+	err = s.repo.CreateTransaction(ctx, tx)
+	if err != nil {
+		return err
+	}
+
+	// Trigger fidelidade automática se houver cliente e agendamento concluído
+	custID, status, errDetails := s.repo.GetAppointmentDetails(ctx, clientID, appID)
+	if errDetails == nil && custID != nil && *custID != "" && status == "completed" && s.loyaltyService != nil {
+		_ = s.loyaltyService.TriggerAutomaticEarn(ctx, clientID, *custID, appID, amount)
+	}
+
+	return nil
 }
 
 func (s *service) UpdatePayment(ctx context.Context, clientID, userID, appID string, amount float64, method string, notes *string) error {

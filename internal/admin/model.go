@@ -39,3 +39,11 @@ type CreateClientUserRequest struct {
 	Role     string `json:"role"`
 	Password string `json:"password"` // Default local password for dev fallback
 }
+
+type BlockRequest struct {
+	Reason string `json:"reason"`
+}
+
+type UpdatePlanRequest struct {
+	PlanID string `json:"plan_id"`
+}

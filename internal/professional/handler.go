@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"barbercentral-core/internal/shared"
+	"barbercentral-core/internal/planlimit"
 )
 
 type ProfessionalHandler struct {
@@ -69,6 +70,13 @@ func (h *ProfessionalHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	p, err := h.service.Create(r.Context(), clientID, req)
 	if err != nil {
+		var limit string
+		var curr, max int
+		n, scanErr := fmt.Sscanf(err.Error(), "plan_limit_exceeded:%s:%d:%d", &limit, &curr, &max)
+		if scanErr == nil && n == 3 {
+			planlimit.RespondWithLimitExceeded(w, limit, curr, max)
+			return
+		}
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao cadastrar profissional", err)
 		return
 	}

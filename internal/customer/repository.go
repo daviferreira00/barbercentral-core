@@ -18,6 +18,7 @@ type CustomerRepository interface {
 	List(ctx context.Context, clientID string, searchQuery string, birthMonth int, limit, offset int) ([]CustomerStats, int, error)
 	Search(ctx context.Context, clientID string, searchQuery string) ([]Customer, error)
 	GetAppointmentsHistory(ctx context.Context, clientID, customerID string) ([]EnrichedAppointmentHistory, error)
+	GetDB() *sqlx.DB
 }
 
 type customerRepository struct {
@@ -26,6 +27,10 @@ type customerRepository struct {
 
 func NewCustomerRepository(db *sqlx.DB) CustomerRepository {
 	return &customerRepository{db: db}
+}
+
+func (r *customerRepository) GetDB() *sqlx.DB {
+	return r.db
 }
 
 func (r *customerRepository) Create(ctx context.Context, c *Customer) error {

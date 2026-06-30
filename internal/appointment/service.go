@@ -13,6 +13,7 @@ import (
 	"barbercentral-core/internal/clientconfig"
 	"barbercentral-core/internal/customer"
 	"barbercentral-core/internal/email"
+	"barbercentral-core/internal/loyalty"
 	"barbercentral-core/internal/professional"
 	svc "barbercentral-core/internal/service"
 	"barbercentral-core/internal/stock"
@@ -53,6 +54,7 @@ type service struct {
 	emailClient *email.Client
 	custService customer.Service
 	stockService stock.Service
+	loyaltyService loyalty.Service
 }
 
 func NewService(
@@ -63,15 +65,17 @@ func NewService(
 	emailClient *email.Client,
 	custService customer.Service,
 	stockService stock.Service,
+	loyaltyService loyalty.Service,
 ) Service {
 	return &service{
-		repo:         repo,
-		configRepo:   configRepo,
-		profRepo:     profRepo,
-		svcRepo:      svcRepo,
-		emailClient:  emailClient,
-		custService:  custService,
-		stockService: stockService,
+		repo:           repo,
+		configRepo:     configRepo,
+		profRepo:       profRepo,
+		svcRepo:        svcRepo,
+		emailClient:    emailClient,
+		custService:    custService,
+		stockService:   stockService,
+		loyaltyService: loyaltyService,
 	}
 }
 
@@ -158,6 +162,14 @@ func (s *service) UpdateStatus(ctx context.Context, clientID, id, status, userID
 			serviceIDs = append(serviceIDs, sVal.ServiceID)
 		}
 		_ = s.stockService.TriggerAutomaticDrop(ctx, clientID, id, serviceIDs)
+	}
+
+	// Acúmulo automático de fidelidade se concluído e pago
+	if status == "completed" && s.loyaltyService != nil && app.CustomerID != nil && *app.CustomerID != "" {
+		payStatus, payAmount, errPay := s.repo.GetPaymentStatus(ctx, clientID, id)
+		if errPay == nil && payStatus == "paid" {
+			_ = s.loyaltyService.TriggerAutomaticEarn(ctx, clientID, *app.CustomerID, id, payAmount)
+		}
 	}
 
 	return nil

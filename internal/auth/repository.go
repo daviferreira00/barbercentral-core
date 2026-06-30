@@ -27,6 +27,7 @@ type AuthRepository interface {
 	// Password Updates
 	UpdateAdminPassword(ctx context.Context, id string, passwordHash string) error
 	UpdateUserPassword(ctx context.Context, id string, passwordHash string) error
+	GetClientStatus(ctx context.Context, clientID string) (string, error)
 }
 
 type authRepository struct {
@@ -124,4 +125,14 @@ func (r *authRepository) UpdateUserPassword(ctx context.Context, id string, pass
 	query := `UPDATE client_user SET password_hash = ? WHERE id = ?`
 	_, err := r.db.ExecContext(ctx, query, passwordHash, id)
 	return err
+}
+
+func (r *authRepository) GetClientStatus(ctx context.Context, clientID string) (string, error) {
+	var status string
+	query := `SELECT status FROM client WHERE id = ? LIMIT 1`
+	err := r.db.GetContext(ctx, &status, query, clientID)
+	if err != nil {
+		return "", err
+	}
+	return status, nil
 }

@@ -24,6 +24,7 @@ type ProfessionalRepository interface {
 	LinkService(ctx context.Context, link *ProfessionalServiceLink) error
 	UnlinkService(ctx context.Context, clientID, professionalID, serviceID string) error
 	UpdatePhoto(ctx context.Context, clientID, id, photoURL string) error
+	GetDB() *sqlx.DB
 }
 
 type professionalRepository struct {
@@ -32,6 +33,10 @@ type professionalRepository struct {
 
 func NewProfessionalRepository(db *sqlx.DB) ProfessionalRepository {
 	return &professionalRepository{db: db}
+}
+
+func (r *professionalRepository) GetDB() *sqlx.DB {
+	return r.db
 }
 
 func (r *professionalRepository) List(ctx context.Context, clientID string, status string) ([]Professional, error) {

@@ -3,11 +3,13 @@ package admin
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
 	"barbercentral-core/internal/shared"
+	"barbercentral-core/internal/planlimit"
 )
 
 type AdminHandler struct {
@@ -94,8 +96,15 @@ func (h *AdminHandler) UpdateClient(w http.ResponseWriter, r *http.Request) {
 
 func (h *AdminHandler) BlockClient(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	performedBy, _ := r.Context().Value("user_id").(string)
+	if performedBy == "" {
+		performedBy = "admin-session"
+	}
 
-	err := h.service.BlockClient(r.Context(), id)
+	var req BlockRequest
+	_ = json.NewDecoder(r.Body).Decode(&req) // Se falhar, reason fica vazio
+
+	err := h.service.BlockClientWithReason(r.Context(), id, req.Reason, performedBy)
 	if err != nil {
 		if errors.Is(err, ErrClientNotFound) {
 			shared.RespondWithError(w, http.StatusNotFound, "Cliente não encontrado", err)
@@ -110,8 +119,15 @@ func (h *AdminHandler) BlockClient(w http.ResponseWriter, r *http.Request) {
 
 func (h *AdminHandler) UnblockClient(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	performedBy, _ := r.Context().Value("user_id").(string)
+	if performedBy == "" {
+		performedBy = "admin-session"
+	}
 
-	err := h.service.UnblockClient(r.Context(), id)
+	var req BlockRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	err := h.service.UnblockClientWithReason(r.Context(), id, req.Reason, performedBy)
 	if err != nil {
 		if errors.Is(err, ErrClientNotFound) {
 			shared.RespondWithError(w, http.StatusNotFound, "Cliente não encontrado", err)
@@ -152,9 +168,80 @@ func (h *AdminHandler) CreateClientUser(w http.ResponseWriter, r *http.Request) 
 
 	u, err := h.service.CreateClientUser(r.Context(), id, req)
 	if err != nil {
+		var limit string
+		var curr, max int
+		n, scanErr := fmt.Sscanf(err.Error(), "plan_limit_exceeded:%s:%d:%d", &limit, &curr, &max)
+		if scanErr == nil && n == 3 {
+			planlimit.RespondWithLimitExceeded(w, limit, curr, max)
+			return
+		}
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao criar usuário para barbearia", err)
 		return
 	}
 
 	shared.RespondWithJSON(w, http.StatusCreated, u)
+}
+
+func (h *AdminHandler) UpdateClientPlan(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var req UpdatePlanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo inválido", err)
+		return
+	}
+
+	if req.PlanID == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "plan_id é obrigatório", nil)
+		return
+	}
+
+	err := h.service.UpdateClientPlan(r.Context(), id, req.PlanID)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao alterar plano do cliente", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (h *AdminHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
+	plans, err := h.service.ListPlans(r.Context())
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao listar planos", err)
+		return
+	}
+	shared.RespondWithJSON(w, http.StatusOK, plans)
+}
+
+func (h *AdminHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
+	var p planlimit.Plan
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo inválido", err)
+		return
+	}
+
+	res, err := h.service.CreatePlan(r.Context(), &p)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao criar plano", err)
+		return
+	}
+	shared.RespondWithJSON(w, http.StatusCreated, res)
+}
+
+func (h *AdminHandler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var p planlimit.Plan
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo inválido", err)
+		return
+	}
+
+	res, err := h.service.UpdatePlan(r.Context(), id, &p)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar plano", err)
+		return
+	}
+	shared.RespondWithJSON(w, http.StatusOK, res)
 }

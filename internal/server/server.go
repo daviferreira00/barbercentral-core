@@ -18,6 +18,9 @@ import (
 	"barbercentral-core/internal/professional"
 	"barbercentral-core/internal/service"
 	"barbercentral-core/internal/stock"
+	"barbercentral-core/internal/loyalty"
+	"barbercentral-core/internal/reports"
+	"barbercentral-core/internal/planlimit"
 )
 
 func New(db *sqlx.DB, cfg *config.Config) http.Handler {
@@ -53,14 +56,19 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 
 	// 2. Instanciar Serviços
 	authService := auth.NewAuthService(authRepo, cfg.JWT.Secret, emailClient)
+	configService := clientconfig.NewConfigService(configRepo)
 	profService := professional.NewService(profRepo)
 	svcService := service.NewServiceService(svcRepo)
-	configService := clientconfig.NewConfigService(configRepo)
 	custService := customer.NewService(custRepo)
-	finService := finance.NewService(finRepo)
+
+	loyaltyRepo := loyalty.NewRepository(db)
+	loyaltyService := loyalty.NewService(loyaltyRepo)
+
+	finService := finance.NewService(finRepo, loyaltyService)
 	stockService := stock.NewService(stockRepo)
-	appService := appointment.NewService(appRepo, configRepo, profRepo, svcRepo, emailClient, custService, stockService)
+	appService := appointment.NewService(appRepo, configRepo, profRepo, svcRepo, emailClient, custService, stockService, loyaltyService)
 	admService := admin.NewAdminService(admRepo)
+	reportsService := reports.NewService(db)
 
 	// 3. Instanciar Handlers
 	authHandler := auth.NewAuthHandler(authService)
@@ -72,6 +80,9 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 	stockHandler := stock.NewHandler(stockService)
 	appHandler := appointment.NewAppointmentHandler(appService)
 	admHandler := admin.NewAdminHandler(admService)
+	loyaltyHandler := loyalty.NewHandler(loyaltyService)
+	reportsHandler := reports.NewHandler(reportsService)
+	limitHandler := planlimit.NewLimitHandler(db)
 
 	// 4. Middlewares de Segurança
 	authMiddleware := middleware.RequireAuth(authService)
@@ -102,6 +113,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 		// Rotas protegidas
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
+			r.Use(planlimit.RequireActiveClient(db))
 
 			// Perfil do Usuário
 			r.Get("/auth/me", authHandler.Me)
@@ -176,23 +188,54 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 			r.With(managerRoleLimit).Put("/appointments/{id}/payment", finHandler.UpdatePayment)
 
 			// Módulo de Controle de Estoque
-			r.Get("/products", stockHandler.List)
-			r.Get("/products/{id}", stockHandler.GetByID)
-			r.With(managerRoleLimit).Post("/products", stockHandler.Create)
-			r.With(managerRoleLimit).Put("/products/{id}", stockHandler.Update)
-			r.With(managerRoleLimit).Delete("/products/{id}", stockHandler.Delete)
-			r.With(managerRoleLimit).Get("/products/low-stock", stockHandler.GetLowStock)
-			r.With(managerRoleLimit).Get("/products/{id}/movements", stockHandler.ListMovementsByProduct)
-			r.With(managerRoleLimit).Post("/products/{id}/movements", stockHandler.CreateMovement)
-			r.With(managerRoleLimit).Get("/stock/movements", stockHandler.ListAllMovements)
-			r.With(managerRoleLimit).Get("/stock/report", stockHandler.StockReport)
-			r.With(managerRoleLimit).Get("/stock/export", stockHandler.ExportCSV)
+			r.Group(func(r chi.Router) {
+				r.Use(planlimit.RequireFeatureStock(db))
+				r.Get("/products", stockHandler.List)
+				r.Get("/products/{id}", stockHandler.GetByID)
+				r.With(managerRoleLimit).Post("/products", stockHandler.Create)
+				r.With(managerRoleLimit).Put("/products/{id}", stockHandler.Update)
+				r.With(managerRoleLimit).Delete("/products/{id}", stockHandler.Delete)
+				r.With(managerRoleLimit).Get("/products/low-stock", stockHandler.GetLowStock)
+				r.With(managerRoleLimit).Get("/products/{id}/movements", stockHandler.ListMovementsByProduct)
+				r.With(managerRoleLimit).Post("/products/{id}/movements", stockHandler.CreateMovement)
+				r.With(managerRoleLimit).Get("/stock/movements", stockHandler.ListAllMovements)
+				r.With(managerRoleLimit).Get("/stock/report", stockHandler.StockReport)
+				r.With(managerRoleLimit).Get("/stock/export", stockHandler.ExportCSV)
 
-			// Vínculos de produtos consumidos em serviços
-			r.With(managerRoleLimit).Get("/services/{id}/products", stockHandler.ListServiceProducts)
-			r.With(managerRoleLimit).Post("/services/{id}/products", stockHandler.LinkServiceProduct)
-			r.With(managerRoleLimit).Put("/services/{id}/products/{product_id}", stockHandler.UpdateServiceProductQty)
-			r.With(managerRoleLimit).Delete("/services/{id}/products/{product_id}", stockHandler.UnlinkServiceProduct)
+				// Vínculos de produtos consumidos em serviços
+				r.With(managerRoleLimit).Get("/services/{id}/products", stockHandler.ListServiceProducts)
+				r.With(managerRoleLimit).Post("/services/{id}/products", stockHandler.LinkServiceProduct)
+				r.With(managerRoleLimit).Put("/services/{id}/products/{product_id}", stockHandler.UpdateServiceProductQty)
+				r.With(managerRoleLimit).Delete("/services/{id}/products/{product_id}", stockHandler.UnlinkServiceProduct)
+			})
+
+			// Módulo de Fidelidade
+			r.Group(func(r chi.Router) {
+				r.Use(planlimit.RequireFeatureLoyalty(db))
+				r.Get("/loyalty/program", loyaltyHandler.GetProgram)
+				r.With(managerRoleLimit).Post("/loyalty/program", loyaltyHandler.SaveProgram)
+				r.With(managerRoleLimit).Put("/loyalty/program", loyaltyHandler.SaveProgram)
+				r.With(managerRoleLimit).Delete("/loyalty/program", loyaltyHandler.DeleteProgram)
+				r.Get("/customers/{id}/loyalty", loyaltyHandler.GetCardByCustomerID)
+				r.With(receptionistRoleLimit).Post("/customers/{id}/loyalty/redeem", loyaltyHandler.RedeemReward)
+			})
+
+			// Módulo de Relatórios e Dashboard
+			r.Group(func(r chi.Router) {
+				r.Use(planlimit.RequireFeatureReports(db))
+				r.Get("/reports/revenue", reportsHandler.GetRevenueReport)
+				r.Get("/reports/occupancy", reportsHandler.GetOccupancyReport)
+				r.Get("/reports/customers", reportsHandler.GetCustomerReport)
+				r.Get("/reports/cancellations", reportsHandler.GetCancellationReport)
+				r.Get("/reports/revenue/export", reportsHandler.ExportRevenueCSV)
+				r.Get("/reports/occupancy/export", reportsHandler.ExportOccupancyCSV)
+				r.Get("/reports/customers/export", reportsHandler.ExportCustomersCSV)
+				r.Get("/reports/cancellations/export", reportsHandler.ExportCancellationsCSV)
+				r.Get("/reports/revenue/pdf", reportsHandler.ExportRevenuePDF)
+			})
+
+			// Módulo de Planos e Indicadores de Uso do Cliente
+			r.With(ownerRoleLimit).Get("/plan/usage", limitHandler.GetUsage)
 
 			// Módulo Admin Geral (exclusivo para platform_admin)
 			r.Group(func(r chi.Router) {
@@ -202,9 +245,14 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 				r.Put("/admin/clients/{id}", admHandler.UpdateClient)
 				r.Post("/admin/clients/{id}/block", admHandler.BlockClient)
 				r.Post("/admin/clients/{id}/unblock", admHandler.UnblockClient)
+				r.Put("/admin/clients/{id}/plan", admHandler.UpdateClientPlan)
 				r.Get("/admin/clients/{id}/users", admHandler.ListClientUsers)
 				r.Post("/admin/clients/{id}/users", admHandler.CreateClientUser)
 				r.Post("/admin/impersonate/{client_id}", authHandler.Impersonate)
+
+				r.Get("/admin/plans", admHandler.ListPlans)
+				r.Post("/admin/plans", admHandler.CreatePlan)
+				r.Put("/admin/plans/{id}", admHandler.UpdatePlan)
 			})
 		})
 	})

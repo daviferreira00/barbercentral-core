@@ -5,11 +5,14 @@ import (
 	"context"
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
+
+	"barbercentral-core/internal/planlimit"
 )
 
 var (
@@ -41,6 +44,14 @@ func NewService(repo CustomerRepository) Service {
 }
 
 func (s *service) Create(ctx context.Context, clientID string, req CreateCustomerRequest) (*Customer, error) {
+	allowed, curr, max, err := planlimit.CheckCustomersLimit(ctx, s.repo.GetDB(), clientID)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("plan_limit_exceeded:max_customers:%d:%d", curr, max)
+	}
+
 	// 1. Valida CPF
 	if req.CPF != nil && *req.CPF != "" {
 		if !ValidateCPF(*req.CPF) {
@@ -220,6 +231,14 @@ func (s *service) GetOrCreateForPortal(ctx context.Context, clientID string, nam
 	}
 
 	// 2. Não existe, cria um novo
+	allowed, curr, max, err := planlimit.CheckCustomersLimit(ctx, s.repo.GetDB(), clientID)
+	if err != nil {
+		return "", err
+	}
+	if !allowed {
+		return "", fmt.Errorf("plan_limit_exceeded:max_customers:%d:%d", curr, max)
+	}
+
 	cust := &Customer{
 		ID:        uuid.New().String(),
 		ClientID:  clientID,

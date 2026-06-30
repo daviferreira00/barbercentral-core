@@ -3,12 +3,14 @@ package customer
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
 	"barbercentral-core/internal/shared"
+	"barbercentral-core/internal/planlimit"
 )
 
 type CustomerHandler struct {
@@ -35,6 +37,13 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	c, err := h.service.Create(r.Context(), clientID, req)
 	if err != nil {
+		var limit string
+		var curr, max int
+		n, scanErr := fmt.Sscanf(err.Error(), "plan_limit_exceeded:%s:%d:%d", &limit, &curr, &max)
+		if scanErr == nil && n == 3 {
+			planlimit.RespondWithLimitExceeded(w, limit, curr, max)
+			return
+		}
 		if errors.Is(err, ErrCPFInvalid) {
 			shared.RespondWithError(w, http.StatusBadRequest, err.Error(), err)
 			return

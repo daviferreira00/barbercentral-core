@@ -30,6 +30,7 @@ type AppointmentRepository interface {
 	GetStatusLogs(ctx context.Context, clientID, appointmentID string) ([]AppointmentStatusLog, error)
 	Update(ctx context.Context, app *Appointment, services []AppointmentService) error
 	Delete(ctx context.Context, clientID, id string) error
+	GetPaymentStatus(ctx context.Context, clientID, appID string) (status string, amount float64, err error)
 }
 
 type appointmentRepository struct {
@@ -335,5 +336,21 @@ func (r *appointmentRepository) Delete(ctx context.Context, clientID, id string)
 	query := "DELETE FROM appointment WHERE id = ? AND client_id = ?"
 	_, err := r.db.ExecContext(ctx, query, id, clientID)
 	return err
+}
+
+func (r *appointmentRepository) GetPaymentStatus(ctx context.Context, clientID, appID string) (status string, amount float64, err error) {
+	var row struct {
+		Status string  `db:"status"`
+		Amount float64 `db:"amount"`
+	}
+	query := "SELECT status, amount FROM appointment_payment WHERE client_id = ? AND appointment_id = ? LIMIT 1"
+	err = r.db.GetContext(ctx, &row, query, clientID, appID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "pending", 0.0, nil
+		}
+		return "", 0.0, err
+	}
+	return row.Status, row.Amount, nil
 }
 

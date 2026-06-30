@@ -2,9 +2,12 @@ package professional
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+
+	"barbercentral-core/internal/planlimit"
 )
 
 type Service interface {
@@ -38,6 +41,14 @@ func (s *service) GetByID(ctx context.Context, clientID, id string) (*Profession
 }
 
 func (s *service) Create(ctx context.Context, clientID string, req CreateProfessionalRequest) (*Professional, error) {
+	allowed, curr, max, err := planlimit.CheckProfessionalsLimit(ctx, s.repo.GetDB(), clientID)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("plan_limit_exceeded:max_professionals:%d:%d", curr, max)
+	}
+
 	pID := uuid.New().String()
 	p := &Professional{
 		ID:        pID,
@@ -52,7 +63,7 @@ func (s *service) Create(ctx context.Context, clientID string, req CreateProfess
 		p.Status = "active"
 	}
 
-	err := s.repo.Create(ctx, p)
+	err = s.repo.Create(ctx, p)
 	if err != nil {
 		return nil, err
 	}

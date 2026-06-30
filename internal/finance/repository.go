@@ -23,6 +23,7 @@ type Repository interface {
 	CreateAppointmentPayment(ctx context.Context, paymentID, appID, clientID string, amount float64, method, status string, notes *string) error
 	GetAppointmentPaymentByAppID(ctx context.Context, clientID, appID string) (*AppointmentPaymentDB, error)
 	UpdateAppointmentPayment(ctx context.Context, clientID, appID string, amount float64, method, status string, notes *string) error
+	GetAppointmentDetails(ctx context.Context, clientID, appID string) (customerID *string, status string, err error)
 }
 
 type AppointmentPaymentDB struct {
@@ -164,4 +165,17 @@ func (r *repository) UpdateAppointmentPayment(ctx context.Context, clientID, app
 	          WHERE client_id = ? AND appointment_id = ?`
 	_, err := r.db.ExecContext(ctx, query, amount, method, status, status, notes, clientID, appID)
 	return err
+}
+
+func (r *repository) GetAppointmentDetails(ctx context.Context, clientID, appID string) (customerID *string, status string, err error) {
+	var row struct {
+		CustomerID *string `db:"customer_id"`
+		Status     string  `db:"status"`
+	}
+	query := "SELECT customer_id, status FROM appointment WHERE client_id = ? AND id = ? LIMIT 1"
+	err = r.db.GetContext(ctx, &row, query, clientID, appID)
+	if err != nil {
+		return nil, "", err
+	}
+	return row.CustomerID, row.Status, nil
 }

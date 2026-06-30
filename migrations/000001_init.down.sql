@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS auth_token;
+DROP TABLE IF EXISTS platform_admin;
+DROP TABLE IF EXISTS client_user;
+DROP TABLE IF EXISTS client;
+DROP TABLE IF EXISTS plan;

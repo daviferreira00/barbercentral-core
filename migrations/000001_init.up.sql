@@ -82,5 +82,5 @@ ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Inserção do Usuário Dono (João Barbeiro - senha: senha123)
 INSERT INTO client_user (id, client_id, name, email, password_hash, role, status) VALUES
-('e2f60b2c-68dc-4e33-91a7-0e625ab73a1e', 'f6e80b2c-68dc-4e33-91a7-0e625ab73a1d', 'João Barbeiro', 'joao@barberiamodelo.com', '$2a$10$y2L7z5qY5aRzKj.7V93qKutL54K/4M23yXl1N98Q3vYjYV4.xM4zW', 'owner', 'active')
+('e2f60b2c-68dc-4e33-91a7-0e625ab73a1e', 'f6e80b2c-68dc-4e33-91a7-0e625ab73a1d', 'João Barbeiro', 'joao@barberiamodelo.com', '$2a$10$NI0.3ybMrRJNdvIpuUVJsegMFhiG/JIByXNVRZYux2L9LN6PfQG9K', 'owner', 'active')
 ON DUPLICATE KEY UPDATE email = VALUES(email);

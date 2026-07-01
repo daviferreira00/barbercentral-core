@@ -61,24 +61,24 @@ INSERT INTO client (id, plan_id, name, slug, status) VALUES
 -- ============================================
 -- 4. USUÁRIOS DAS BARBEARIAS
 -- ============================================
--- Todos com senha: senha123 → $2a$10$y2L7z5qY5aRzKj.7V93qKutL54K/4M23yXl1N98Q3vYjYV4.xM4zW
+-- Todos com senha: senha123 → $2a$10$NI0.3ybMrRJNdvIpuUVJsegMFhiG/JIByXNVRZYux2L9LN6PfQG9K
 
 -- Barbearia Modelo
 INSERT INTO client_user (id, client_id, name, email, password_hash, role, status) VALUES
-('usr-joao',    'cli-barber-modelo', 'João Barbeiro',    'joao@barberiamodelo.com',    '$2a$10$y2L7z5qY5aRzKj.7V93qKutL54K/4M23yXl1N98Q3vYjYV4.xM4zW', 'owner',          'active'),
-('usr-marcos',  'cli-barber-modelo', 'Marcos Cabeleireiro', 'marcos@barberiamodelo.com', '$2a$10$y2L7z5qY5aRzKj.7V93qKutL54K/4M23yXl1N98Q3vYjYV4.xM4zW', 'professional',   'active'),
-('usr-tiago',   'cli-barber-modelo', 'Tiago Barbeiro',   'tiago@barberiamodelo.com',   '$2a$10$y2L7z5qY5aRzKj.7V93qKutL54K/4M23yXl1N98Q3vYjYV4.xM4zW', 'professional',   'active'),
-('usr-rodolfo', 'cli-barber-modelo', 'Rodolfo Estilista','rodolfo@barberiamodelo.com','$2a$10$y2L7z5qY5aRzKj.7V93qKutL54K/4M23yXl1N98Q3vYjYV4.xM4zW', 'professional',   'active'),
-('usr-recep',   'cli-barber-modelo', 'Maria Recepção',   'maria@barberiamodelo.com',   '$2a$10$y2L7z5qY5aRzKj.7V93qKutL54K/4M23yXl1N98Q3vYjYV4.xM4zW', 'receptionist',   'active');
+('usr-joao',    'cli-barber-modelo', 'João Barbeiro',    'joao@barberiamodelo.com',    '$2a$10$NI0.3ybMrRJNdvIpuUVJsegMFhiG/JIByXNVRZYux2L9LN6PfQG9K', 'owner',          'active'),
+('usr-marcos',  'cli-barber-modelo', 'Marcos Cabeleireiro', 'marcos@barberiamodelo.com', '$2a$10$NI0.3ybMrRJNdvIpuUVJsegMFhiG/JIByXNVRZYux2L9LN6PfQG9K', 'professional',   'active'),
+('usr-tiago',   'cli-barber-modelo', 'Tiago Barbeiro',   'tiago@barberiamodelo.com',   '$2a$10$NI0.3ybMrRJNdvIpuUVJsegMFhiG/JIByXNVRZYux2L9LN6PfQG9K', 'professional',   'active'),
+('usr-rodolfo', 'cli-barber-modelo', 'Rodolfo Estilista','rodolfo@barberiamodelo.com','$2a$10$NI0.3ybMrRJNdvIpuUVJsegMFhiG/JIByXNVRZYux2L9LN6PfQG9K', 'professional',   'active'),
+('usr-recep',   'cli-barber-modelo', 'Maria Recepção',   'maria@barberiamodelo.com',   '$2a$10$NI0.3ybMrRJNdvIpuUVJsegMFhiG/JIByXNVRZYux2L9LN6PfQG9K', 'receptionist',   'active');
 
 -- Corte Fino
 INSERT INTO client_user (id, client_id, name, email, password_hash, role, status) VALUES
-('usr-carlos',  'cli-corte-fino', 'Carlos Lopes',  'carlos@cortefino.com',  '$2a$10$y2L7z5qY5aRzKj.7V93qKutL54K/4M23yXl1N98Q3vYjYV4.xM4zW', 'owner',        'active'),
-('usr-roberto', 'cli-corte-fino', 'Roberto Silva', 'roberto@cortefino.com', '$2a$10$y2L7z5qY5aRzKj.7V93qKutL54K/4M23yXl1N98Q3vYjYV4.xM4zW', 'professional', 'active');
+('usr-carlos',  'cli-corte-fino', 'Carlos Lopes',  'carlos@cortefino.com',  '$2a$10$NI0.3ybMrRJNdvIpuUVJsegMFhiG/JIByXNVRZYux2L9LN6PfQG9K', 'owner',        'active'),
+('usr-roberto', 'cli-corte-fino', 'Roberto Silva', 'roberto@cortefino.com', '$2a$10$NI0.3ybMrRJNdvIpuUVJsegMFhiG/JIByXNVRZYux2L9LN6PfQG9K', 'professional', 'active');
 
 -- Barba Rápida
 INSERT INTO client_user (id, client_id, name, email, password_hash, role, status) VALUES
-('usr-andre', 'cli-teste-basico', 'André Bastos', 'andre@barbarapida.com', '$2a$10$y2L7z5qY5aRzKj.7V93qKutL54K/4M23yXl1N98Q3vYjYV4.xM4zW', 'owner', 'active');
+('usr-andre', 'cli-teste-basico', 'André Bastos', 'andre@barbarapida.com', '$2a$10$NI0.3ybMrRJNdvIpuUVJsegMFhiG/JIByXNVRZYux2L9LN6PfQG9K', 'owner', 'active');
 
 -- ============================================
 -- 5. CLIENT CONFIG (Identidade Visual e Configurações)

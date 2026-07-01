@@ -203,3 +203,50 @@ func (h *ConfigHandler) GetPublicProfessionals(w http.ResponseWriter, r *http.Re
 
 	shared.RespondWithJSON(w, http.StatusOK, professionals)
 }
+
+// Admin handlers - operate on any client by ID from URL
+
+func (h *ConfigHandler) GetConfigByClientID(w http.ResponseWriter, r *http.Request) {
+	clientID := chi.URLParam(r, "id")
+
+	cfg, err := h.service.GetByClientID(r.Context(), clientID)
+	if err != nil {
+		if errors.Is(err, ErrConfigNotFound) {
+			cfg = &ClientConfig{
+				ClientID:                clientID,
+				ColorPrimary:            "#1a1a1a",
+				ColorSecondary:          "#c9a84c",
+				FontFamily:              "Inter",
+				Timezone:                "America/Sao_Paulo",
+				CancellationPolicyHours: 2,
+				MinAdvanceHours:         1,
+				MaxAdvanceDays:          30,
+				Active:                  1,
+			}
+			shared.RespondWithJSON(w, http.StatusOK, cfg)
+			return
+		}
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao buscar configurações", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, cfg)
+}
+
+func (h *ConfigHandler) UpdateConfigByClientID(w http.ResponseWriter, r *http.Request) {
+	clientID := chi.URLParam(r, "id")
+
+	var req UpdateConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido", err)
+		return
+	}
+
+	cfg, err := h.service.Update(r.Context(), clientID, req)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar configurações", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, cfg)
+}

@@ -23,6 +23,8 @@ type AdminService interface {
 	UpdateClientPlan(ctx context.Context, id, planID string) error
 	ListClientUsers(ctx context.Context, clientID string) ([]ClientUser, error)
 	CreateClientUser(ctx context.Context, clientID string, req CreateClientUserRequest) (*ClientUser, error)
+	UpdateClientUser(ctx context.Context, userID string, req UpdateClientUserRequest) error
+	DeleteClientUser(ctx context.Context, userID string) error
 
 	ListPlans(ctx context.Context) ([]planlimit.Plan, error)
 	CreatePlan(ctx context.Context, p *planlimit.Plan) (*planlimit.Plan, error)
@@ -151,6 +153,14 @@ func (s *adminService) CreateClientUser(ctx context.Context, clientID string, re
 	}
 
 	return u, nil
+}
+
+func (s *adminService) UpdateClientUser(ctx context.Context, userID string, req UpdateClientUserRequest) error {
+	return s.repo.UpdateClientUser(ctx, userID, req)
+}
+
+func (s *adminService) DeleteClientUser(ctx context.Context, userID string) error {
+	return s.repo.DeleteClientUser(ctx, userID)
 }
 
 func (s *adminService) ListPlans(ctx context.Context) ([]planlimit.Plan, error) {

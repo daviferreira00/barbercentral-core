@@ -14,13 +14,13 @@ import (
 	"barbercentral-core/internal/customer"
 	"barbercentral-core/internal/email"
 	"barbercentral-core/internal/finance"
+	"barbercentral-core/internal/loyalty"
 	"barbercentral-core/internal/middleware"
+	"barbercentral-core/internal/planlimit"
 	"barbercentral-core/internal/professional"
+	"barbercentral-core/internal/reports"
 	"barbercentral-core/internal/service"
 	"barbercentral-core/internal/stock"
-	"barbercentral-core/internal/loyalty"
-	"barbercentral-core/internal/reports"
-	"barbercentral-core/internal/planlimit"
 )
 
 func New(db *sqlx.DB, cfg *config.Config) http.Handler {
@@ -241,6 +241,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(adminRoleLimit)
 				r.Get("/admin/clients", admHandler.ListClients)
+				r.Get("/admin/clients/{id}", admHandler.GetClientByID)
 				r.Post("/admin/clients", admHandler.CreateClient)
 				r.Put("/admin/clients/{id}", admHandler.UpdateClient)
 				r.Post("/admin/clients/{id}/block", admHandler.BlockClient)
@@ -248,6 +249,8 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 				r.Put("/admin/clients/{id}/plan", admHandler.UpdateClientPlan)
 				r.Get("/admin/clients/{id}/users", admHandler.ListClientUsers)
 				r.Post("/admin/clients/{id}/users", admHandler.CreateClientUser)
+				r.Put("/admin/clients/{id}/users/{user_id}", admHandler.UpdateClientUser)
+				r.Delete("/admin/clients/{id}/users/{user_id}", admHandler.DeleteClientUser)
 				r.Post("/admin/impersonate/{client_id}", authHandler.Impersonate)
 
 				r.Get("/admin/plans", admHandler.ListPlans)

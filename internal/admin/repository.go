@@ -22,6 +22,8 @@ type AdminRepository interface {
 	UpdateClientStatus(ctx context.Context, id, status string) error
 	ListClientUsers(ctx context.Context, clientID string) ([]ClientUser, error)
 	CreateClientUser(ctx context.Context, u *ClientUser, passwordHash string) error
+	UpdateClientUser(ctx context.Context, userID string, req UpdateClientUserRequest) error
+	DeleteClientUser(ctx context.Context, userID string) error
 	UpdateClientPlan(ctx context.Context, id, planID string) error
 	CreateBlockLog(ctx context.Context, id, clientID, action, reason, performedBy string) error
 	ListPlans(ctx context.Context) ([]planlimit.Plan, error)
@@ -113,6 +115,38 @@ func (r *adminRepository) CreateClientUser(ctx context.Context, u *ClientUser, p
 	          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := r.db.ExecContext(ctx, query, u.ID, u.ClientID, u.Name, u.Email, passwordHash, u.Role, u.Status, u.CreatedAt)
 	return err
+}
+
+func (r *adminRepository) UpdateClientUser(ctx context.Context, userID string, req UpdateClientUserRequest) error {
+	query := `UPDATE client_user SET name = ?, email = ?, role = ?, status = ? WHERE id = ?`
+	res, err := r.db.ExecContext(ctx, query, req.Name, req.Email, req.Role, req.Status, userID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errors.New("usuário não encontrado")
+	}
+	return nil
+}
+
+func (r *adminRepository) DeleteClientUser(ctx context.Context, userID string) error {
+	query := "DELETE FROM client_user WHERE id = ?"
+	res, err := r.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errors.New("usuário não encontrado")
+	}
+	return nil
 }
 
 func (r *adminRepository) UpdateClientPlan(ctx context.Context, id, planID string) error {

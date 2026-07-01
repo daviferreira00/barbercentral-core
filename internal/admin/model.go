@@ -47,3 +47,10 @@ type BlockRequest struct {
 type UpdatePlanRequest struct {
 	PlanID string `json:"plan_id"`
 }
+
+type UpdateClientUserRequest struct {
+	Name   string `json:"name"`
+	Email  string `json:"email"`
+	Role   string `json:"role"`
+	Status string `json:"status"`
+}

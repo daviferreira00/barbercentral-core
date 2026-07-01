@@ -182,6 +182,41 @@ func (h *AdminHandler) CreateClientUser(w http.ResponseWriter, r *http.Request) 
 	shared.RespondWithJSON(w, http.StatusCreated, u)
 }
 
+func (h *AdminHandler) UpdateClientUser(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "user_id")
+
+	var req UpdateClientUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido", err)
+		return
+	}
+
+	if req.Name == "" || req.Email == "" || req.Role == "" || req.Status == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Nome, e-mail, função e status são obrigatórios", nil)
+		return
+	}
+
+	err := h.service.UpdateClientUser(r.Context(), userID, req)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar usuário", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (h *AdminHandler) DeleteClientUser(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "user_id")
+
+	err := h.service.DeleteClientUser(r.Context(), userID)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao excluir usuário", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 func (h *AdminHandler) UpdateClientPlan(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 

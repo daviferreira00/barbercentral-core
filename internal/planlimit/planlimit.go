@@ -19,7 +19,10 @@ type Plan struct {
 	HasReports       int     `db:"has_reports" json:"has_reports"`
 	HasOnlineBooking int     `db:"has_online_booking" json:"has_online_booking"`
 	IsPublic         int     `db:"is_public" json:"is_public"`
+	BillingType      string  `db:"billing_type" json:"billing_type"`
 	Price            float64 `db:"price" json:"price"`
+	FeaturesJSON     *string `db:"features_json" json:"features_json,omitempty"`
+	CreatedAt        string  `db:"created_at" json:"created_at,omitempty"`
 }
 
 type UsageResponse struct {

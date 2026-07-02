@@ -23,15 +23,17 @@ type ClientUser struct {
 }
 
 type CreateClientRequest struct {
-	PlanID string `json:"plan_id"`
-	Name   string `json:"name"`
-	Slug   string `json:"slug"`
+	PlanID       string  `json:"plan_id"`
+	Name         string  `json:"name"`
+	Slug         string  `json:"slug"`
+	CustomDomain *string `json:"custom_domain"`
 }
 
 type UpdateClientRequest struct {
-	PlanID string `json:"plan_id"`
-	Name   string `json:"name"`
-	Slug   string `json:"slug"`
+	PlanID       string  `json:"plan_id"`
+	Name         string  `json:"name"`
+	Slug         string  `json:"slug"`
+	CustomDomain *string `json:"custom_domain"`
 }
 
 type CreateClientUserRequest struct {

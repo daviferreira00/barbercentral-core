@@ -1,24 +1,4 @@
 services:
-  db:
-    image: mysql:8.0
-    container_name: barbercentral-db-prod
-    restart: unless-stopped
-    environment:
-      MYSQL_DATABASE: barbercentral
-      MYSQL_USER: barbercentral_user
-      MYSQL_PASSWORD: barbercentral_password_prod
-      MYSQL_ROOT_PASSWORD: root_password_prod
-    ports:
-      - "3307:3306"
-    volumes:
-      - barbercentral-db-data-prod:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "barbercentral_user", "-pbarbercentral_password_prod"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
   app:
     build:
       context: .
@@ -29,13 +9,13 @@ services:
       db:
         condition: service_healthy
     env_file:
-      - .env.prod
+      - .env
     ports:
       - "8081:8080"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3

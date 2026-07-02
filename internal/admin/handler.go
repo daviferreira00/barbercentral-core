@@ -321,3 +321,78 @@ func (h *AdminHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	fileURL := fmt.Sprintf("/uploads/%s", filename)
 	shared.RespondWithJSON(w, http.StatusOK, map[string]string{"url": fileURL})
 }
+
+func (h *AdminHandler) ListAllUsers(w http.ResponseWriter, r *http.Request) {
+	list, err := h.service.ListAllUsers(r.Context())
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao listar usuários", err)
+		return
+	}
+	shared.RespondWithJSON(w, http.StatusOK, list)
+}
+
+func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var req CreateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido", err)
+		return
+	}
+
+	if req.Type == "" || req.Name == "" || req.Email == "" || req.Password == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Tipo, nome, e-mail e senha são obrigatórios", nil)
+		return
+	}
+
+	u, err := h.service.CreateUser(r.Context(), req)
+	if err != nil {
+		var limit string
+		var curr, max int
+		n, scanErr := fmt.Sscanf(err.Error(), "plan_limit_exceeded:%s:%d:%d", &limit, &curr, &max)
+		if scanErr == nil && n == 3 {
+			planlimit.RespondWithLimitExceeded(w, limit, curr, max)
+			return
+		}
+		shared.RespondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusCreated, u)
+}
+
+func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	userType := chi.URLParam(r, "user_type")
+	id := chi.URLParam(r, "id")
+
+	var req UpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido", err)
+		return
+	}
+
+	if req.Name == "" || req.Email == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Nome e e-mail são obrigatórios", nil)
+		return
+	}
+
+	err := h.service.UpdateUser(r.Context(), userType, id, req)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	userType := chi.URLParam(r, "user_type")
+	id := chi.URLParam(r, "id")
+
+	err := h.service.DeleteUser(r.Context(), userType, id)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao excluir usuário", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+

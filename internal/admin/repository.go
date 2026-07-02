@@ -30,6 +30,12 @@ type AdminRepository interface {
 	CreatePlan(ctx context.Context, p *planlimit.Plan) error
 	UpdatePlan(ctx context.Context, p *planlimit.Plan) error
 	GetDB() *sqlx.DB
+
+	ListAllUsers(ctx context.Context) ([]AdminUserResponse, error)
+	CheckEmailExists(ctx context.Context, email string, excludeID string) (bool, error)
+	CreateAdminUser(ctx context.Context, id, name, email, passwordHash string) error
+	UpdateAdminUser(ctx context.Context, id, name, email, passwordHash string) error
+	DeleteAdminUser(ctx context.Context, id string) error
 }
 
 type adminRepository struct {
@@ -118,8 +124,18 @@ func (r *adminRepository) CreateClientUser(ctx context.Context, u *ClientUser, p
 }
 
 func (r *adminRepository) UpdateClientUser(ctx context.Context, userID string, req UpdateClientUserRequest) error {
-	query := `UPDATE client_user SET name = ?, email = ?, role = ?, status = ? WHERE id = ?`
-	res, err := r.db.ExecContext(ctx, query, req.Name, req.Email, req.Role, req.Status, userID)
+	var query string
+	var args []interface{}
+
+	if req.PasswordHash != "" {
+		query = `UPDATE client_user SET name = ?, email = ?, role = ?, status = ?, client_id = ?, password_hash = ? WHERE id = ?`
+		args = []interface{}{req.Name, req.Email, req.Role, req.Status, req.ClientID, req.PasswordHash, userID}
+	} else {
+		query = `UPDATE client_user SET name = ?, email = ?, role = ?, status = ?, client_id = ? WHERE id = ?`
+		args = []interface{}{req.Name, req.Email, req.Role, req.Status, req.ClientID, userID}
+	}
+
+	res, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -202,6 +218,108 @@ func (r *adminRepository) UpdatePlan(ctx context.Context, p *planlimit.Plan) err
 	}
 	if rows == 0 {
 		return errors.New("plano não encontrado")
+	}
+	return nil
+}
+
+func (r *adminRepository) ListAllUsers(ctx context.Context) ([]AdminUserResponse, error) {
+	var list []AdminUserResponse
+	query := `
+		SELECT 
+			cu.id, 
+			'client' as type, 
+			cu.name, 
+			cu.email, 
+			cu.role, 
+			cu.status, 
+			cu.client_id, 
+			c.name as client_name,
+			cu.created_at 
+		FROM client_user cu
+		LEFT JOIN client c ON cu.client_id = c.id
+		UNION ALL
+		SELECT 
+			pa.id, 
+			'admin' as type, 
+			pa.name, 
+			pa.email, 
+			'admin' as role, 
+			'active' as status, 
+			'' as client_id, 
+			'' as client_name,
+			pa.created_at 
+		FROM platform_admin pa
+		ORDER BY name ASC
+	`
+	err := r.db.SelectContext(ctx, &list, query)
+	return list, err
+}
+
+func (r *adminRepository) CheckEmailExists(ctx context.Context, email string, excludeID string) (bool, error) {
+	var count int
+	// Check in client_user
+	query := `SELECT COUNT(*) FROM client_user WHERE email = ? AND id != ?`
+	err := r.db.GetContext(ctx, &count, query, email, excludeID)
+	if err != nil {
+		return false, err
+	}
+	if count > 0 {
+		return true, nil
+	}
+	
+	// Check in platform_admin
+	query = `SELECT COUNT(*) FROM platform_admin WHERE email = ? AND id != ?`
+	err = r.db.GetContext(ctx, &count, query, email, excludeID)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (r *adminRepository) CreateAdminUser(ctx context.Context, id, name, email, passwordHash string) error {
+	query := `INSERT INTO platform_admin (id, name, email, password_hash, created_at) VALUES (?, ?, ?, ?, NOW())`
+	_, err := r.db.ExecContext(ctx, query, id, name, email, passwordHash)
+	return err
+}
+
+func (r *adminRepository) UpdateAdminUser(ctx context.Context, id, name, email, passwordHash string) error {
+	var query string
+	var args []interface{}
+	
+	if passwordHash != "" {
+		query = `UPDATE platform_admin SET name = ?, email = ?, password_hash = ? WHERE id = ?`
+		args = []interface{}{name, email, passwordHash, id}
+	} else {
+		query = `UPDATE platform_admin SET name = ?, email = ? WHERE id = ?`
+		args = []interface{}{name, email, id}
+	}
+	
+	res, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errors.New("admin não encontrado")
+	}
+	return nil
+}
+
+func (r *adminRepository) DeleteAdminUser(ctx context.Context, id string) error {
+	query := `DELETE FROM platform_admin WHERE id = ?`
+	res, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errors.New("admin não encontrado")
 	}
 	return nil
 }

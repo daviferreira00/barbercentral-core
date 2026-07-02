@@ -29,6 +29,11 @@ type AdminService interface {
 	ListPlans(ctx context.Context) ([]planlimit.Plan, error)
 	CreatePlan(ctx context.Context, p *planlimit.Plan) (*planlimit.Plan, error)
 	UpdatePlan(ctx context.Context, id string, p *planlimit.Plan) (*planlimit.Plan, error)
+
+	ListAllUsers(ctx context.Context) ([]AdminUserResponse, error)
+	CreateUser(ctx context.Context, req CreateUserRequest) (interface{}, error)
+	UpdateUser(ctx context.Context, userType string, id string, req UpdateUserRequest) error
+	DeleteUser(ctx context.Context, userType string, id string) error
 }
 
 type adminService struct {
@@ -187,4 +192,138 @@ func (s *adminService) UpdatePlan(ctx context.Context, id string, p *planlimit.P
 		return nil, err
 	}
 	return p, nil
+}
+
+func (s *adminService) ListAllUsers(ctx context.Context) ([]AdminUserResponse, error) {
+	return s.repo.ListAllUsers(ctx)
+}
+
+func (s *adminService) CreateUser(ctx context.Context, req CreateUserRequest) (interface{}, error) {
+	// 1. Check if email already exists
+	exists, err := s.repo.CheckEmailExists(ctx, req.Email, "")
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, fmt.Errorf("email_already_exists: O e-mail já está em uso na plataforma")
+	}
+
+	// 2. Hash password
+	pwd := req.Password
+	if pwd == "" {
+		pwd = "senha_padrao_local"
+	}
+	hashBytes, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+	passwordHash := string(hashBytes)
+
+	// 3. Create according to type
+	if req.Type == "admin" {
+		id := uuid.New().String()
+		err := s.repo.CreateAdminUser(ctx, id, req.Name, req.Email, passwordHash)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{
+			"id":    id,
+			"type":  "admin",
+			"name":  req.Name,
+			"email": req.Email,
+		}, nil
+	} else if req.Type == "client" {
+		if req.ClientID == "" {
+			return nil, fmt.Errorf("client_id é obrigatório para usuários de barbearia")
+		}
+		// Check client plan limits
+		allowed, curr, max, err := planlimit.CheckUsersLimit(ctx, s.repo.GetDB(), req.ClientID)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, fmt.Errorf("plan_limit_exceeded:max_users:%d:%d", curr, max)
+		}
+
+		role := req.Role
+		if role == "" {
+			role = "owner"
+		}
+
+		u := &ClientUser{
+			ID:        uuid.New().String(),
+			ClientID:  req.ClientID,
+			Name:      req.Name,
+			Email:     req.Email,
+			Role:      role,
+			Status:    "active",
+			CreatedAt: time.Now(),
+		}
+
+		err = s.repo.CreateClientUser(ctx, u, passwordHash)
+		if err != nil {
+			return nil, err
+		}
+		return u, nil
+	}
+
+	return nil, fmt.Errorf("tipo de usuário inválido: %s", req.Type)
+}
+
+func (s *adminService) UpdateUser(ctx context.Context, userType string, id string, req UpdateUserRequest) error {
+	// 1. Check if email already exists (excluding this user's ID)
+	exists, err := s.repo.CheckEmailExists(ctx, req.Email, id)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("email_already_exists: O e-mail já está em uso na plataforma")
+	}
+
+	// 2. Hash password if provided
+	var passwordHash string
+	if req.Password != "" {
+		hashBytes, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		passwordHash = string(hashBytes)
+	}
+
+	// 3. Update according to type
+	if userType == "admin" {
+		return s.repo.UpdateAdminUser(ctx, id, req.Name, req.Email, passwordHash)
+	} else if userType == "client" {
+		if req.ClientID == "" {
+			return fmt.Errorf("client_id é obrigatório para usuários de barbearia")
+		}
+		role := req.Role
+		if role == "" {
+			role = "owner"
+		}
+		status := req.Status
+		if status == "" {
+			status = "active"
+		}
+
+		return s.repo.UpdateClientUser(ctx, id, UpdateClientUserRequest{
+			Name:         req.Name,
+			Email:        req.Email,
+			Role:         role,
+			Status:       status,
+			ClientID:     req.ClientID,
+			PasswordHash: passwordHash,
+		})
+	}
+
+	return fmt.Errorf("tipo de usuário inválido: %s", userType)
+}
+
+func (s *adminService) DeleteUser(ctx context.Context, userType string, id string) error {
+	if userType == "admin" {
+		return s.repo.DeleteAdminUser(ctx, id)
+	} else if userType == "client" {
+		return s.repo.DeleteClientUser(ctx, id)
+	}
+	return fmt.Errorf("tipo de usuário inválido: %s", userType)
 }

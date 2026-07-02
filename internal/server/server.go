@@ -256,6 +256,11 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 				r.Post("/admin/impersonate/{client_id}", authHandler.Impersonate)
 				r.Post("/admin/upload", admHandler.UploadFile)
 
+				r.Get("/admin/users", admHandler.ListAllUsers)
+				r.Post("/admin/users", admHandler.CreateUser)
+				r.Put("/admin/users/{user_type}/{id}", admHandler.UpdateUser)
+				r.Delete("/admin/users/{user_type}/{id}", admHandler.DeleteUser)
+
 				r.Get("/admin/plans", admHandler.ListPlans)
 				r.Post("/admin/plans", admHandler.CreatePlan)
 				r.Put("/admin/plans/{id}", admHandler.UpdatePlan)

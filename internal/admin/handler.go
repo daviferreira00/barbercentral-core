@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -279,4 +283,41 @@ func (h *AdminHandler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	shared.RespondWithJSON(w, http.StatusOK, res)
+}
+
+func (h *AdminHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseMultipartForm(5 * 1024 * 1024) // 5MB limit
+	if err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Arquivo inválido ou muito grande", err)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "O campo 'file' é obrigatório", err)
+		return
+	}
+	defer file.Close()
+
+	_ = os.MkdirAll("./uploads", 0755)
+
+	ext := filepath.Ext(header.Filename)
+	filename := fmt.Sprintf("upload_%d%s", time.Now().UnixNano(), ext)
+	outPath := filepath.Join("./uploads", filename)
+
+	out, err := os.Create(outPath)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao salvar arquivo localmente", err)
+		return
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, file)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao gravar conteúdo do arquivo", err)
+		return
+	}
+
+	fileURL := fmt.Sprintf("/uploads/%s", filename)
+	shared.RespondWithJSON(w, http.StatusOK, map[string]string{"url": fileURL})
 }

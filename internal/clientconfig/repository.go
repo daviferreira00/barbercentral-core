@@ -45,8 +45,12 @@ func (r *configRepository) GetByClientID(ctx context.Context, clientID string) (
 
 func (r *configRepository) Update(ctx context.Context, cfg *ClientConfig) error {
 	query := `UPDATE client_config SET
+		logo_url = :logo_url,
+		logo_central = :logo_central,
 		color_primary = :color_primary,
 		color_secondary = :color_secondary,
+		color_button = :color_button,
+		background_type = :background_type,
 		font_family = :font_family,
 		address = :address,
 		neighborhood = :neighborhood,
@@ -73,11 +77,11 @@ func (r *configRepository) Update(ctx context.Context, cfg *ClientConfig) error 
 	if rows == 0 {
 		// Se não existe, cria
 		queryInsert := `INSERT INTO client_config (
-			client_id, color_primary, color_secondary, font_family, address, neighborhood, city, state,
+			client_id, logo_url, logo_central, color_primary, color_secondary, color_button, background_type, font_family, address, neighborhood, city, state,
 			phone, whatsapp, instagram, timezone, cancellation_policy_hours, booking_requires_login,
 			min_advance_hours, max_advance_days, interval_between_minutes, active
 		) VALUES (
-			:client_id, :color_primary, :color_secondary, :font_family, :address, :neighborhood, :city, :state,
+			:client_id, :logo_url, :logo_central, :color_primary, :color_secondary, :color_button, :background_type, :font_family, :address, :neighborhood, :city, :state,
 			:phone, :whatsapp, :instagram, :timezone, :cancellation_policy_hours, :booking_requires_login,
 			:min_advance_hours, :max_advance_days, :interval_between_minutes, 1
 		)`

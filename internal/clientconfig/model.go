@@ -3,8 +3,11 @@ package clientconfig
 type ClientConfig struct {
 	ClientID                 string  `json:"client_id" db:"client_id"`
 	LogoURL                  *string `json:"logo_url,omitempty" db:"logo_url"`
+	LogoCentral              *string `json:"logo_central,omitempty" db:"logo_central"`
 	ColorPrimary             string  `json:"color_primary" db:"color_primary"`
 	ColorSecondary           string  `json:"color_secondary" db:"color_secondary"`
+	ColorButton              *string `json:"color_button,omitempty" db:"color_button"`
+	BackgroundType           *string `json:"background_type,omitempty" db:"background_type"`
 	FontFamily               string  `json:"font_family" db:"font_family"`
 	Address                  *string `json:"address,omitempty" db:"address"`
 	Neighborhood             *string `json:"neighborhood,omitempty" db:"neighborhood"`
@@ -23,8 +26,12 @@ type ClientConfig struct {
 }
 
 type UpdateConfigRequest struct {
+	LogoURL                  *string `json:"logo_url"`
+	LogoCentral              *string `json:"logo_central"`
 	ColorPrimary             string  `json:"color_primary"`
 	ColorSecondary           string  `json:"color_secondary"`
+	ColorButton              *string `json:"color_button"`
+	BackgroundType           *string `json:"background_type"`
 	FontFamily               string  `json:"font_family"`
 	Address                  *string `json:"address"`
 	Neighborhood             *string `json:"neighborhood"`

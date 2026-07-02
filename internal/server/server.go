@@ -254,6 +254,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 				r.Get("/admin/clients/{id}/config", configHandler.GetConfigByClientID)
 				r.Put("/admin/clients/{id}/config", configHandler.UpdateConfigByClientID)
 				r.Post("/admin/impersonate/{client_id}", authHandler.Impersonate)
+				r.Post("/admin/upload", admHandler.UploadFile)
 
 				r.Get("/admin/plans", admHandler.ListPlans)
 				r.Post("/admin/plans", admHandler.CreatePlan)

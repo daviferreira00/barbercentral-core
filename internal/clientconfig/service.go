@@ -24,8 +24,12 @@ func (s *configService) GetByClientID(ctx context.Context, clientID string) (*Cl
 func (s *configService) Update(ctx context.Context, clientID string, req UpdateConfigRequest) (*ClientConfig, error) {
 	cfg := &ClientConfig{
 		ClientID:                 clientID,
+		LogoURL:                  req.LogoURL,
+		LogoCentral:              req.LogoCentral,
 		ColorPrimary:             req.ColorPrimary,
 		ColorSecondary:           req.ColorSecondary,
+		ColorButton:              req.ColorButton,
+		BackgroundType:           req.BackgroundType,
 		FontFamily:               req.FontFamily,
 		Address:                  req.Address,
 		Neighborhood:             req.Neighborhood,

@@ -3,12 +3,13 @@ package admin
 import "time"
 
 type Client struct {
-	ID        string    `json:"id" db:"id"`
-	PlanID    string    `json:"plan_id" db:"plan_id"`
-	Name      string    `json:"name" db:"name"`
-	Slug      string    `json:"slug" db:"slug"`
-	Status    string    `json:"status" db:"status"` // active, blocked
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	ID           string    `json:"id" db:"id"`
+	PlanID       string    `json:"plan_id" db:"plan_id"`
+	Name         string    `json:"name" db:"name"`
+	Slug         string    `json:"slug" db:"slug"`
+	CustomDomain *string   `json:"custom_domain" db:"custom_domain"`
+	Status       string    `json:"status" db:"status"` // active, blocked
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 }
 
 type ClientUser struct {

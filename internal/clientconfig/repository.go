@@ -90,13 +90,14 @@ func (r *configRepository) Update(ctx context.Context, cfg *ClientConfig) error 
 func (r *configRepository) GetBySlug(ctx context.Context, slug string) (*PublicClientData, error) {
 	// Verifica primeiro se a barbearia está ativa
 	var c struct {
-		ID     string `db:"id"`
-		Name   string `db:"name"`
-		Slug   string `db:"slug"`
-		Status string `db:"status"`
+		ID           string  `db:"id"`
+		Name         string  `db:"name"`
+		Slug         string  `db:"slug"`
+		Status       string  `db:"status"`
+		CustomDomain *string `db:"custom_domain"`
 	}
-	queryClient := "SELECT id, name, slug, status FROM client WHERE slug = ?"
-	err := r.db.GetContext(ctx, &c, queryClient, slug)
+	queryClient := "SELECT id, name, slug, status, custom_domain FROM client WHERE slug = ? OR custom_domain = ?"
+	err := r.db.GetContext(ctx, &c, queryClient, slug, slug)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrConfigNotFound
@@ -138,6 +139,7 @@ func (r *configRepository) GetBySlug(ctx context.Context, slug string) (*PublicC
 		ClientConfig: cfg,
 		ClientName:   c.Name,
 		ClientSlug:   c.Slug,
+		CustomDomain: c.CustomDomain,
 	}, nil
 }
 

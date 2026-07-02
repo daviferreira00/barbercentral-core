@@ -43,6 +43,7 @@ type UpdateConfigRequest struct {
 
 type PublicClientData struct {
 	ClientConfig
-	ClientName string `json:"client_name"`
-	ClientSlug string `json:"client_slug"`
+	ClientName   string  `json:"client_name"`
+	ClientSlug   string  `json:"client_slug"`
+	CustomDomain *string `json:"custom_domain,omitempty"`
 }

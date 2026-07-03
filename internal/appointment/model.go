@@ -46,6 +46,7 @@ type EnrichedAppointment struct {
 	Appointment
 	ProfessionalName string               `json:"professional_name"`
 	Services         []EnrichedAppService `json:"services"`
+	StartedAt        *time.Time           `json:"started_at,omitempty"`
 }
 
 type EnrichedAppService struct {

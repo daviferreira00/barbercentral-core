@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -121,10 +122,18 @@ func (r *appointmentRepository) List(ctx context.Context, clientID, professional
 		             WHERE aps.appointment_id = ?`
 		_ = r.db.SelectContext(ctx, &services, querySrv, app.ID)
 
+		var startedAt []time.Time
+		_ = r.db.SelectContext(ctx, &startedAt, "SELECT created_at FROM appointment_status_log WHERE appointment_id = ? AND to_status = 'in_progress' ORDER BY created_at DESC LIMIT 1", app.ID)
+		var startedAtPtr *time.Time
+		if len(startedAt) > 0 {
+			startedAtPtr = &startedAt[0]
+		}
+
 		enrichedList = append(enrichedList, EnrichedAppointment{
 			Appointment:      app,
 			ProfessionalName: profName,
 			Services:         services,
+			StartedAt:        startedAtPtr,
 		})
 	}
 
@@ -152,10 +161,18 @@ func (r *appointmentRepository) GetByID(ctx context.Context, clientID, id string
 	             WHERE aps.appointment_id = ?`
 	_ = r.db.SelectContext(ctx, &services, querySrv, app.ID)
 
+	var startedAt []time.Time
+	_ = r.db.SelectContext(ctx, &startedAt, "SELECT created_at FROM appointment_status_log WHERE appointment_id = ? AND to_status = 'in_progress' ORDER BY created_at DESC LIMIT 1", app.ID)
+	var startedAtPtr *time.Time
+	if len(startedAt) > 0 {
+		startedAtPtr = &startedAt[0]
+	}
+
 	return &EnrichedAppointment{
 		Appointment:      app,
 		ProfessionalName: profName,
 		Services:         services,
+		StartedAt:        startedAtPtr,
 	}, nil
 }
 
@@ -222,10 +239,18 @@ func (r *appointmentRepository) GetByCancelToken(ctx context.Context, token stri
 	             WHERE aps.appointment_id = ?`
 	_ = r.db.SelectContext(ctx, &services, querySrv, app.ID)
 
+	var startedAt []time.Time
+	_ = r.db.SelectContext(ctx, &startedAt, "SELECT created_at FROM appointment_status_log WHERE appointment_id = ? AND to_status = 'in_progress' ORDER BY created_at DESC LIMIT 1", app.ID)
+	var startedAtPtr *time.Time
+	if len(startedAt) > 0 {
+		startedAtPtr = &startedAt[0]
+	}
+
 	return &EnrichedAppointment{
 		Appointment:      app,
 		ProfessionalName: profName,
 		Services:         services,
+		StartedAt:        startedAtPtr,
 	}, nil
 }
 
@@ -249,10 +274,18 @@ func (r *appointmentRepository) GetUpcomingAppointmentsForReminder(ctx context.C
 		             WHERE aps.appointment_id = ?`
 		_ = r.db.SelectContext(ctx, &services, querySrv, app.ID)
 
+		var startedAt []time.Time
+		_ = r.db.SelectContext(ctx, &startedAt, "SELECT created_at FROM appointment_status_log WHERE appointment_id = ? AND to_status = 'in_progress' ORDER BY created_at DESC LIMIT 1", app.ID)
+		var startedAtPtr *time.Time
+		if len(startedAt) > 0 {
+			startedAtPtr = &startedAt[0]
+		}
+
 		enrichedList = append(enrichedList, EnrichedAppointment{
 			Appointment:      app,
 			ProfessionalName: profName,
 			Services:         services,
+			StartedAt:        startedAtPtr,
 		})
 	}
 

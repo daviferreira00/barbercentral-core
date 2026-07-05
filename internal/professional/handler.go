@@ -12,6 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"strings"
+
 	"barbercentral-core/internal/shared"
 	"barbercentral-core/internal/planlimit"
 )
@@ -216,6 +218,28 @@ func (h *ProfessionalHandler) UploadPhoto(w http.ResponseWriter, r *http.Request
 	clientID, _ := r.Context().Value("client_id").(string)
 	id := chi.URLParam(r, "id")
 
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		var req struct {
+			PhotoURL string `json:"photo_url"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			shared.RespondWithError(w, http.StatusBadRequest, "Corpo do JSON inválido", err)
+			return
+		}
+		if req.PhotoURL == "" {
+			shared.RespondWithError(w, http.StatusBadRequest, "Campo photo_url é obrigatório", nil)
+			return
+		}
+		err := h.service.UpdatePhoto(r.Context(), clientID, id, req.PhotoURL)
+		if err != nil {
+			shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao associar foto ao profissional", err)
+			return
+		}
+		shared.RespondWithJSON(w, http.StatusOK, map[string]string{"photo_url": req.PhotoURL})
+		return
+	}
+
 	err := r.ParseMultipartForm(10 * 1024 * 1024)
 	if err != nil {
 		shared.RespondWithError(w, http.StatusBadRequest, "Falha ao processar arquivo multipart", err)
@@ -229,7 +253,7 @@ func (h *ProfessionalHandler) UploadPhoto(w http.ResponseWriter, r *http.Request
 	}
 	defer file.Close()
 
-	err = os.MkdirAll("./uploads", os.ModePerm)
+	err = os.MkdirAll(shared.GetUploadsDir(), os.ModePerm)
 	if err != nil {
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao preparar diretório de uploads", err)
 		return
@@ -237,7 +261,7 @@ func (h *ProfessionalHandler) UploadPhoto(w http.ResponseWriter, r *http.Request
 
 	ext := filepath.Ext(header.Filename)
 	filename := fmt.Sprintf("%s-%s%s", id, uuid.New().String(), ext)
-	filePath := filepath.Join("./uploads", filename)
+	filePath := filepath.Join(shared.GetUploadsDir(), filename)
 
 	out, err := os.Create(filePath)
 	if err != nil {
@@ -252,7 +276,7 @@ func (h *ProfessionalHandler) UploadPhoto(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	photoURL := fmt.Sprintf("/api/uploads/%s", filename)
+	photoURL := fmt.Sprintf("/uploads/%s", filename)
 
 	err = h.service.UpdatePhoto(r.Context(), clientID, id, photoURL)
 	if err != nil {

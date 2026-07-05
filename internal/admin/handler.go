@@ -301,11 +301,11 @@ func (h *AdminHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	_ = os.MkdirAll("./uploads", 0755)
+	_ = os.MkdirAll(shared.GetUploadsDir(), 0755)
 
 	ext := filepath.Ext(header.Filename)
 	filename := fmt.Sprintf("upload_%d%s", time.Now().UnixNano(), ext)
-	outPath := filepath.Join("./uploads", filename)
+	outPath := filepath.Join(shared.GetUploadsDir(), filename)
 
 	out, err := os.Create(outPath)
 	if err != nil {
@@ -320,7 +320,7 @@ func (h *AdminHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileURL := fmt.Sprintf("/api/uploads/%s", filename)
+	fileURL := fmt.Sprintf("/uploads/%s", filename)
 	shared.RespondWithJSON(w, http.StatusOK, map[string]string{"url": fileURL})
 }
 

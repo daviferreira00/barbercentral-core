@@ -93,11 +93,11 @@ func (h *ConfigHandler) UploadLogo(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	_ = os.MkdirAll("./uploads", 0755)
+	_ = os.MkdirAll(shared.GetUploadsDir(), 0755)
 
 	ext := filepath.Ext(header.Filename)
 	filename := fmt.Sprintf("logo_%s_%d%s", clientID, time.Now().Unix(), ext)
-	outPath := filepath.Join("./uploads", filename)
+	outPath := filepath.Join(shared.GetUploadsDir(), filename)
 
 	out, err := os.Create(outPath)
 	if err != nil {
@@ -112,7 +112,7 @@ func (h *ConfigHandler) UploadLogo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logoURL := fmt.Sprintf("/api/uploads/%s", filename)
+	logoURL := fmt.Sprintf("/uploads/%s", filename)
 	err = h.service.UpdateLogo(r.Context(), clientID, logoURL)
 	if err != nil {
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar logo no banco de dados", err)
@@ -138,11 +138,11 @@ func (h *ConfigHandler) UploadLogoCentral(w http.ResponseWriter, r *http.Request
 	}
 	defer file.Close()
 
-	_ = os.MkdirAll("./uploads", 0755)
+	_ = os.MkdirAll(shared.GetUploadsDir(), 0755)
 
 	ext := filepath.Ext(header.Filename)
 	filename := fmt.Sprintf("logo_central_%s_%d%s", clientID, time.Now().Unix(), ext)
-	outPath := filepath.Join("./uploads", filename)
+	outPath := filepath.Join(shared.GetUploadsDir(), filename)
 
 	out, err := os.Create(outPath)
 	if err != nil {
@@ -157,7 +157,7 @@ func (h *ConfigHandler) UploadLogoCentral(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	logoURL := fmt.Sprintf("/api/uploads/%s", filename)
+	logoURL := fmt.Sprintf("/uploads/%s", filename)
 	err = h.service.UpdateLogoCentral(r.Context(), clientID, logoURL)
 	if err != nil {
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar logo no banco de dados", err)

@@ -83,6 +83,11 @@ type CreatePublicAppointmentRequest struct {
 type TimeSlot struct {
 	StartTime string `json:"start_time"` // HH:MM
 	EndTime   string `json:"end_time"`   // HH:MM
+	// Preenchidos para o fluxo "qualquer profissional": indicam qual
+	// profissional está de fato livre nesse horário, para o cliente
+	// reservar sem precisar escolher um profissional antes.
+	ProfessionalID   string `json:"professional_id,omitempty"`
+	ProfessionalName string `json:"professional_name,omitempty"`
 }
 
 type AppointmentPayment struct {

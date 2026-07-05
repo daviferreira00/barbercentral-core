@@ -59,6 +59,25 @@ func (h *ConfigHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	shared.RespondWithJSON(w, http.StatusOK, cfg)
 }
 
+// GetBranding devolve config + nome/slug da barbearia ATIVA da sessão (JWT),
+// mesmo formato de GetPublicData mas sem depender de slug na URL — usado pelo
+// layout autenticado para pintar branding sem subdomínio.
+func (h *ConfigHandler) GetBranding(w http.ResponseWriter, r *http.Request) {
+	clientID, _ := r.Context().Value("client_id").(string)
+	if clientID == "" {
+		shared.RespondWithError(w, http.StatusNotFound, "Nenhuma barbearia selecionada", nil)
+		return
+	}
+
+	data, err := h.service.GetBrandingByClientID(r.Context(), clientID)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao buscar identidade visual da barbearia", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, data)
+}
+
 func (h *ConfigHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	clientID, _ := r.Context().Value("client_id").(string)
 

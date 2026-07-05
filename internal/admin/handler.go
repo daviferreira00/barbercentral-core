@@ -179,6 +179,14 @@ func (h *AdminHandler) CreateClientUser(w http.ResponseWriter, r *http.Request) 
 			planlimit.RespondWithLimitExceeded(w, limit, curr, max)
 			return
 		}
+		if errors.Is(err, ErrLinkAlreadyExists) {
+			shared.RespondWithError(w, http.StatusConflict, "Este usuário já possui vínculo com esta barbearia", nil)
+			return
+		}
+		if errors.Is(err, ErrEmailBelongsToAdmin) {
+			shared.RespondWithError(w, http.StatusConflict, "Este e-mail já pertence a um administrador da plataforma", nil)
+			return
+		}
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao criar usuário para barbearia", err)
 		return
 	}
@@ -187,7 +195,7 @@ func (h *AdminHandler) CreateClientUser(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *AdminHandler) UpdateClientUser(w http.ResponseWriter, r *http.Request) {
-	userID := chi.URLParam(r, "user_id")
+	linkID := chi.URLParam(r, "link_id")
 
 	var req UpdateClientUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -200,10 +208,12 @@ func (h *AdminHandler) UpdateClientUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	req.ClientID = chi.URLParam(r, "id")
-
-	err := h.service.UpdateClientUser(r.Context(), userID, req)
+	err := h.service.UpdateClientUser(r.Context(), linkID, req)
 	if err != nil {
+		if errors.Is(err, ErrClientUserLinkNotFound) {
+			shared.RespondWithError(w, http.StatusNotFound, "Vínculo não encontrado", nil)
+			return
+		}
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar usuário", err)
 		return
 	}
@@ -212,10 +222,14 @@ func (h *AdminHandler) UpdateClientUser(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *AdminHandler) DeleteClientUser(w http.ResponseWriter, r *http.Request) {
-	userID := chi.URLParam(r, "user_id")
+	linkID := chi.URLParam(r, "link_id")
 
-	err := h.service.DeleteClientUser(r.Context(), userID)
+	err := h.service.DeleteClientUser(r.Context(), linkID)
 	if err != nil {
+		if errors.Is(err, ErrClientUserLinkNotFound) {
+			shared.RespondWithError(w, http.StatusNotFound, "Vínculo não encontrado", nil)
+			return
+		}
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao excluir usuário", err)
 		return
 	}
@@ -352,6 +366,14 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		n, scanErr := fmt.Sscanf(err.Error(), "plan_limit_exceeded:%s:%d:%d", &limit, &curr, &max)
 		if scanErr == nil && n == 3 {
 			planlimit.RespondWithLimitExceeded(w, limit, curr, max)
+			return
+		}
+		if errors.Is(err, ErrLinkAlreadyExists) {
+			shared.RespondWithError(w, http.StatusConflict, "Este usuário já possui vínculo com esta barbearia", nil)
+			return
+		}
+		if errors.Is(err, ErrEmailBelongsToAdmin) {
+			shared.RespondWithError(w, http.StatusConflict, "Este e-mail já pertence a um administrador da plataforma", nil)
 			return
 		}
 		shared.RespondWithError(w, http.StatusInternalServerError, err.Error(), err)

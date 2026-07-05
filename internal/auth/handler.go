@@ -51,6 +51,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			shared.RespondWithError(w, http.StatusForbidden, "Esta conta está inativa", nil)
 			return
 		}
+		if errors.Is(err, ErrNoActiveMembership) {
+			shared.RespondWithError(w, http.StatusForbidden, "Sua conta não está vinculada a nenhuma barbearia ativa no momento. Fale com o administrador da plataforma.", nil)
+			return
+		}
+		if errors.Is(err, ErrClientBlocked) {
+			shared.RespondWithError(w, http.StatusForbidden, "Sua barbearia está suspensa ou bloqueada pelo administrador.", nil)
+			return
+		}
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro interno ao processar login", err)
 		return
 	}
@@ -195,21 +203,16 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userIDVal := ctx.Value("user_id")
-	userRoleVal := ctx.Value("user_role")
-	if userIDVal == nil || userRoleVal == nil {
+	userID, ok1 := ctx.Value("user_id").(string)
+	userRole, _ := ctx.Value("user_role").(string)
+	clientID, _ := ctx.Value("client_id").(string)
+	originalAdminID, _ := ctx.Value("original_admin_id").(string)
+	if !ok1 || userID == "" {
 		shared.RespondWithError(w, http.StatusUnauthorized, "Não autenticado", nil)
 		return
 	}
 
-	userID, ok1 := userIDVal.(string)
-	userRole, ok2 := userRoleVal.(string)
-	if !ok1 || !ok2 {
-		shared.RespondWithError(w, http.StatusUnauthorized, "Não autenticado", nil)
-		return
-	}
-
-	profile, err := h.service.GetProfile(ctx, userID, userRole)
+	profile, err := h.service.GetProfile(ctx, userID, userRole, clientID, originalAdminID)
 	if err != nil {
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao carregar perfil", err)
 		return
@@ -229,22 +232,91 @@ func (h *AuthHandler) Impersonate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adminIDVal := r.Context().Value("user_id")
-	if adminIDVal == nil {
-		shared.RespondWithError(w, http.StatusUnauthorized, "Não autenticado", nil)
-		return
-	}
-	adminID, ok := adminIDVal.(string)
-	if !ok {
+	adminID, ok := r.Context().Value("user_id").(string)
+	if !ok || adminID == "" {
 		shared.RespondWithError(w, http.StatusUnauthorized, "Não autenticado", nil)
 		return
 	}
 
 	tokenStr, err := h.service.Impersonate(r.Context(), adminID, clientID)
 	if err != nil {
+		if errors.Is(err, ErrClientBlocked) {
+			shared.RespondWithError(w, http.StatusForbidden, "Esta barbearia está suspensa ou bloqueada", nil)
+			return
+		}
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao realizar impersonação", err)
 		return
 	}
 
-	shared.RespondWithJSON(w, http.StatusOK, map[string]string{"token": tokenStr})
+	shared.RespondWithJSON(w, http.StatusOK, TokenResponse{Token: tokenStr})
+}
+
+func (h *AuthHandler) SwitchClient(w http.ResponseWriter, r *http.Request) {
+	var req SwitchClientRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido", err)
+		return
+	}
+	if req.ClientID == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "O client_id é obrigatório", nil)
+		return
+	}
+
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok || userID == "" {
+		shared.RespondWithError(w, http.StatusUnauthorized, "Não autenticado", nil)
+		return
+	}
+
+	tokenStr, err := h.service.SwitchClient(r.Context(), userID, req.ClientID)
+	if err != nil {
+		if errors.Is(err, ErrNoActiveMembership) {
+			shared.RespondWithError(w, http.StatusForbidden, "Você não tem vínculo ativo com esta barbearia", nil)
+			return
+		}
+		if errors.Is(err, ErrClientBlocked) {
+			shared.RespondWithError(w, http.StatusForbidden, "Esta barbearia está suspensa ou bloqueada", nil)
+			return
+		}
+		if errors.Is(err, ErrInactiveUser) {
+			shared.RespondWithError(w, http.StatusForbidden, "Sua conta está inativa", nil)
+			return
+		}
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao trocar de barbearia", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, TokenResponse{Token: tokenStr})
+}
+
+func (h *AuthHandler) MyClients(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok || userID == "" {
+		shared.RespondWithError(w, http.StatusUnauthorized, "Não autenticado", nil)
+		return
+	}
+
+	list, err := h.service.MyClients(r.Context(), userID)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao listar barbearias vinculadas", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, list)
+}
+
+func (h *AuthHandler) ReturnToAdmin(w http.ResponseWriter, r *http.Request) {
+	originalAdminID, _ := r.Context().Value("original_admin_id").(string)
+
+	tokenStr, err := h.service.ReturnToAdmin(r.Context(), originalAdminID)
+	if err != nil {
+		if errors.Is(err, ErrNotImpersonating) {
+			shared.RespondWithError(w, http.StatusBadRequest, "Esta sessão não está impersonando nenhum admin", nil)
+			return
+		}
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao voltar para o painel admin", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, TokenResponse{Token: tokenStr})
 }

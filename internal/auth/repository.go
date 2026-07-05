@@ -15,9 +15,14 @@ var (
 
 type AuthRepository interface {
 	GetAdminByEmail(ctx context.Context, email string) (*PlatformAdmin, error)
-	GetUserByEmail(ctx context.Context, email string) (*ClientUser, error)
+	GetUserAccountByEmail(ctx context.Context, email string) (*UserAccount, error)
 	GetAdminByID(ctx context.Context, id string) (*PlatformAdmin, error)
-	GetUserByID(ctx context.Context, id string) (*ClientUser, error)
+	GetUserAccountByID(ctx context.Context, id string) (*UserAccount, error)
+
+	// Vínculos usuário↔barbearia
+	ListActiveMemberships(ctx context.Context, userID string) ([]ClientUserLink, error)
+	GetMembership(ctx context.Context, userID, clientID string) (*ClientUserLink, error)
+	ListMembershipsWithClient(ctx context.Context, userID string) ([]ClientMembership, error)
 
 	// Password Resets & Magic Links Tokens
 	CreateToken(ctx context.Context, token *AuthToken) error
@@ -51,9 +56,9 @@ func (r *authRepository) GetAdminByEmail(ctx context.Context, email string) (*Pl
 	return &admin, nil
 }
 
-func (r *authRepository) GetUserByEmail(ctx context.Context, email string) (*ClientUser, error) {
-	var user ClientUser
-	query := `SELECT id, client_id, name, email, password_hash, role, status, created_at FROM client_user WHERE email = ? LIMIT 1`
+func (r *authRepository) GetUserAccountByEmail(ctx context.Context, email string) (*UserAccount, error) {
+	var user UserAccount
+	query := `SELECT id, name, email, password_hash, status, created_at FROM user_account WHERE email = ? LIMIT 1`
 	err := r.db.GetContext(ctx, &user, query, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -77,9 +82,9 @@ func (r *authRepository) GetAdminByID(ctx context.Context, id string) (*Platform
 	return &admin, nil
 }
 
-func (r *authRepository) GetUserByID(ctx context.Context, id string) (*ClientUser, error) {
-	var user ClientUser
-	query := `SELECT id, client_id, name, email, password_hash, role, status, created_at FROM client_user WHERE id = ? LIMIT 1`
+func (r *authRepository) GetUserAccountByID(ctx context.Context, id string) (*UserAccount, error) {
+	var user UserAccount
+	query := `SELECT id, name, email, password_hash, status, created_at FROM user_account WHERE id = ? LIMIT 1`
 	err := r.db.GetContext(ctx, &user, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -88,6 +93,45 @@ func (r *authRepository) GetUserByID(ctx context.Context, id string) (*ClientUse
 		return nil, err
 	}
 	return &user, nil
+}
+
+func (r *authRepository) ListActiveMemberships(ctx context.Context, userID string) ([]ClientUserLink, error) {
+	var links []ClientUserLink
+	query := `SELECT id, user_id, client_id, role, status, created_at FROM client_user_link WHERE user_id = ? AND status = 'active'`
+	err := r.db.SelectContext(ctx, &links, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	return links, nil
+}
+
+func (r *authRepository) GetMembership(ctx context.Context, userID, clientID string) (*ClientUserLink, error) {
+	var link ClientUserLink
+	query := `SELECT id, user_id, client_id, role, status, created_at FROM client_user_link WHERE user_id = ? AND client_id = ? LIMIT 1`
+	err := r.db.GetContext(ctx, &link, query, userID, clientID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return &link, nil
+}
+
+func (r *authRepository) ListMembershipsWithClient(ctx context.Context, userID string) ([]ClientMembership, error) {
+	var list []ClientMembership
+	query := `
+		SELECT cul.id AS link_id, cul.client_id, c.name AS client_name, c.slug AS client_slug, cul.role, cul.status
+		FROM client_user_link cul
+		JOIN client c ON c.id = cul.client_id
+		WHERE cul.user_id = ? AND cul.status = 'active'
+		ORDER BY c.name ASC
+	`
+	err := r.db.SelectContext(ctx, &list, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 func (r *authRepository) CreateToken(ctx context.Context, token *AuthToken) error {
@@ -122,7 +166,7 @@ func (r *authRepository) UpdateAdminPassword(ctx context.Context, id string, pas
 }
 
 func (r *authRepository) UpdateUserPassword(ctx context.Context, id string, passwordHash string) error {
-	query := `UPDATE client_user SET password_hash = ? WHERE id = ?`
+	query := `UPDATE user_account SET password_hash = ? WHERE id = ?`
 	_, err := r.db.ExecContext(ctx, query, passwordHash, id)
 	return err
 }

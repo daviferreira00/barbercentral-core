@@ -103,7 +103,7 @@ func CheckUsersLimit(ctx context.Context, db *sqlx.DB, clientID string) (bool, i
 	}
 
 	var count int
-	err = db.GetContext(ctx, &count, "SELECT COUNT(*) FROM client_user WHERE client_id = ?", clientID)
+	err = db.GetContext(ctx, &count, "SELECT COUNT(*) FROM client_user_link WHERE client_id = ? AND status = 'active'", clientID)
 	if err != nil {
 		return false, 0, 0, err
 	}
@@ -187,14 +187,27 @@ func RequireFeatureReports(db *sqlx.DB) func(http.Handler) http.Handler {
 	}
 }
 
-func RequireActiveClient(db *sqlx.DB) func(http.Handler) http.Handler {
+// RequireClientSelected substitui a antiga RequireActiveClient: além de checar
+// se a barbearia está bloqueada, bloqueia ativamente quem não é admin e ainda
+// não escolheu uma barbearia ativa (client_id vazio) — caso de usuários com
+// 2+ vínculos que ainda não passaram pelo seletor.
+func RequireClientSelected(db *sqlx.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			role, _ := r.Context().Value("user_role").(string)
 			clientID, _ := r.Context().Value("client_id").(string)
+
 			if clientID == "" {
-				next.ServeHTTP(w, r)
+				if role == "admin" {
+					next.ServeHTTP(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(`{"error":"client_not_selected","message":"Selecione uma barbearia para continuar."}`))
 				return
 			}
+
 			var status string
 			query := "SELECT status FROM client WHERE id = ? LIMIT 1"
 			err := db.GetContext(r.Context(), &status, query, clientID)
@@ -237,7 +250,7 @@ func (h *LimitHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.GetContext(r.Context(), &countCustomers, "SELECT COUNT(*) FROM customer WHERE client_id = ?", clientID)
 
 	var countUsers int
-	_ = h.db.GetContext(r.Context(), &countUsers, "SELECT COUNT(*) FROM client_user WHERE client_id = ?", clientID)
+	_ = h.db.GetContext(r.Context(), &countUsers, "SELECT COUNT(*) FROM client_user_link WHERE client_id = ? AND status = 'active'", clientID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

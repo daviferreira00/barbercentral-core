@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 
 	"barbercentral-core/internal/planlimit"
 )
+
+var ErrEmailBelongsToAdmin = errors.New("email_already_exists: este e-mail já pertence a um administrador da plataforma")
 
 type AdminService interface {
 	ListClients(ctx context.Context) ([]Client, error)
@@ -124,6 +127,10 @@ func (s *adminService) ListClientUsers(ctx context.Context, clientID string) ([]
 	return s.repo.ListClientUsers(ctx, clientID)
 }
 
+// CreateClientUser vincula um usuário a uma barbearia. Se já existir uma
+// identidade (user_account) com o e-mail informado, apenas cria o vínculo
+// novo (client_user_link) — não duplica o usuário. Só cria identidade nova
+// quando o e-mail é inédito na plataforma.
 func (s *adminService) CreateClientUser(ctx context.Context, clientID string, req CreateClientUserRequest) (*ClientUser, error) {
 	allowed, curr, max, err := planlimit.CheckUsersLimit(ctx, s.repo.GetDB(), clientID)
 	if err != nil {
@@ -133,14 +140,20 @@ func (s *adminService) CreateClientUser(ctx context.Context, clientID string, re
 		return nil, fmt.Errorf("plan_limit_exceeded:max_users:%d:%d", curr, max)
 	}
 
-	u := &ClientUser{
-		ID:        uuid.New().String(),
-		ClientID:  clientID,
-		Name:      req.Name,
-		Email:     req.Email,
-		Role:      req.Role,
-		Status:    "active",
-		CreatedAt: time.Now(),
+	isAdminEmail, err := s.repo.EmailExistsAsAdmin(ctx, req.Email)
+	if err != nil {
+		return nil, err
+	}
+	if isAdminEmail {
+		return nil, ErrEmailBelongsToAdmin
+	}
+
+	existing, err := s.repo.FindUserAccountByEmail(ctx, req.Email)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return s.repo.LinkExistingUser(ctx, clientID, existing.ID, req.Role)
 	}
 
 	// Senha padrão local para testes/fallback
@@ -154,20 +167,17 @@ func (s *adminService) CreateClientUser(ctx context.Context, clientID string, re
 		return nil, err
 	}
 
-	err = s.repo.CreateClientUser(ctx, u, string(hashBytes))
-	if err != nil {
-		return nil, err
-	}
-
-	return u, nil
+	return s.repo.CreateUserWithLink(ctx, clientID, req, string(hashBytes))
 }
 
-func (s *adminService) UpdateClientUser(ctx context.Context, userID string, req UpdateClientUserRequest) error {
-	return s.repo.UpdateClientUser(ctx, userID, req)
+// UpdateClientUser/DeleteClientUser operam por link_id (id de client_user_link),
+// não mais por user_id — um mesmo usuário pode ter vários vínculos.
+func (s *adminService) UpdateClientUser(ctx context.Context, linkID string, req UpdateClientUserRequest) error {
+	return s.repo.UpdateClientUserLink(ctx, linkID, req)
 }
 
-func (s *adminService) DeleteClientUser(ctx context.Context, userID string) error {
-	return s.repo.DeleteClientUser(ctx, userID)
+func (s *adminService) DeleteClientUser(ctx context.Context, linkID string) error {
+	return s.repo.DeleteClientUserLink(ctx, linkID)
 }
 
 func (s *adminService) ListPlans(ctx context.Context) ([]planlimit.Plan, error) {
@@ -198,31 +208,29 @@ func (s *adminService) ListAllUsers(ctx context.Context) ([]AdminUserResponse, e
 	return s.repo.ListAllUsers(ctx)
 }
 
+// CreateUser (endpoint genérico /admin/users) — para "client", segue a mesma
+// regra de achar-ou-criar por e-mail do CreateClientUser.
 func (s *adminService) CreateUser(ctx context.Context, req CreateUserRequest) (interface{}, error) {
-	// 1. Check if email already exists
-	exists, err := s.repo.CheckEmailExists(ctx, req.Email, "")
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, fmt.Errorf("email_already_exists: O e-mail já está em uso na plataforma")
-	}
-
-	// 2. Hash password
-	pwd := req.Password
-	if pwd == "" {
-		pwd = "senha_padrao_local"
-	}
-	hashBytes, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, err
-	}
-	passwordHash := string(hashBytes)
-
-	// 3. Create according to type
 	if req.Type == "admin" {
+		exists, err := s.repo.CheckEmailExists(ctx, req.Email, "")
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, fmt.Errorf("email_already_exists: O e-mail já está em uso na plataforma")
+		}
+
+		pwd := req.Password
+		if pwd == "" {
+			pwd = "senha_padrao_local"
+		}
+		hashBytes, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, err
+		}
+
 		id := uuid.New().String()
-		err := s.repo.CreateAdminUser(ctx, id, req.Name, req.Email, passwordHash)
+		err = s.repo.CreateAdminUser(ctx, id, req.Name, req.Email, string(hashBytes))
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +244,28 @@ func (s *adminService) CreateUser(ctx context.Context, req CreateUserRequest) (i
 		if req.ClientID == "" {
 			return nil, fmt.Errorf("client_id é obrigatório para usuários de barbearia")
 		}
-		// Check client plan limits
+
+		isAdminEmail, err := s.repo.EmailExistsAsAdmin(ctx, req.Email)
+		if err != nil {
+			return nil, err
+		}
+		if isAdminEmail {
+			return nil, ErrEmailBelongsToAdmin
+		}
+
+		role := req.Role
+		if role == "" {
+			role = "owner"
+		}
+
+		existing, err := s.repo.FindUserAccountByEmail(ctx, req.Email)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			return s.repo.LinkExistingUser(ctx, req.ClientID, existing.ID, role)
+		}
+
 		allowed, curr, max, err := planlimit.CheckUsersLimit(ctx, s.repo.GetDB(), req.ClientID)
 		if err != nil {
 			return nil, err
@@ -245,42 +274,26 @@ func (s *adminService) CreateUser(ctx context.Context, req CreateUserRequest) (i
 			return nil, fmt.Errorf("plan_limit_exceeded:max_users:%d:%d", curr, max)
 		}
 
-		role := req.Role
-		if role == "" {
-			role = "owner"
+		pwd := req.Password
+		if pwd == "" {
+			pwd = "senha_padrao_local"
 		}
-
-		u := &ClientUser{
-			ID:        uuid.New().String(),
-			ClientID:  req.ClientID,
-			Name:      req.Name,
-			Email:     req.Email,
-			Role:      role,
-			Status:    "active",
-			CreatedAt: time.Now(),
-		}
-
-		err = s.repo.CreateClientUser(ctx, u, passwordHash)
+		hashBytes, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)
 		if err != nil {
 			return nil, err
 		}
-		return u, nil
+
+		return s.repo.CreateUserWithLink(ctx, req.ClientID, CreateClientUserRequest{
+			Name: req.Name, Email: req.Email, Role: role, Password: req.Password,
+		}, string(hashBytes))
 	}
 
 	return nil, fmt.Errorf("tipo de usuário inválido: %s", req.Type)
 }
 
+// UpdateUser: para "client", id é o link_id (não mais o id do usuário) —
+// name/email/password afetam a identidade global; role/status, só o vínculo.
 func (s *adminService) UpdateUser(ctx context.Context, userType string, id string, req UpdateUserRequest) error {
-	// 1. Check if email already exists (excluding this user's ID)
-	exists, err := s.repo.CheckEmailExists(ctx, req.Email, id)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return fmt.Errorf("email_already_exists: O e-mail já está em uso na plataforma")
-	}
-
-	// 2. Hash password if provided
 	var passwordHash string
 	if req.Password != "" {
 		hashBytes, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -290,13 +303,16 @@ func (s *adminService) UpdateUser(ctx context.Context, userType string, id strin
 		passwordHash = string(hashBytes)
 	}
 
-	// 3. Update according to type
 	if userType == "admin" {
+		exists, err := s.repo.CheckEmailExists(ctx, req.Email, id)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return fmt.Errorf("email_already_exists: O e-mail já está em uso na plataforma")
+		}
 		return s.repo.UpdateAdminUser(ctx, id, req.Name, req.Email, passwordHash)
 	} else if userType == "client" {
-		if req.ClientID == "" {
-			return fmt.Errorf("client_id é obrigatório para usuários de barbearia")
-		}
 		role := req.Role
 		if role == "" {
 			role = "owner"
@@ -306,12 +322,23 @@ func (s *adminService) UpdateUser(ctx context.Context, userType string, id strin
 			status = "active"
 		}
 
-		return s.repo.UpdateClientUser(ctx, id, UpdateClientUserRequest{
+		userID, err := s.repo.GetUserIDByLinkID(ctx, id)
+		if err != nil {
+			return err
+		}
+		exists, err := s.repo.CheckEmailExists(ctx, req.Email, userID)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return fmt.Errorf("email_already_exists: O e-mail já está em uso na plataforma")
+		}
+
+		return s.repo.UpdateClientUserLink(ctx, id, UpdateClientUserRequest{
 			Name:         req.Name,
 			Email:        req.Email,
 			Role:         role,
 			Status:       status,
-			ClientID:     req.ClientID,
 			PasswordHash: passwordHash,
 		})
 	}
@@ -323,7 +350,7 @@ func (s *adminService) DeleteUser(ctx context.Context, userType string, id strin
 	if userType == "admin" {
 		return s.repo.DeleteAdminUser(ctx, id)
 	} else if userType == "client" {
-		return s.repo.DeleteClientUser(ctx, id)
+		return s.repo.DeleteClientUserLink(ctx, id)
 	}
 	return fmt.Errorf("tipo de usuário inválido: %s", userType)
 }

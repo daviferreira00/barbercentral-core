@@ -177,7 +177,7 @@ func (h *AppointmentHandler) CreatePublic(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if req.ProfessionalID == "" || len(req.ServiceIDs) == 0 || req.Date == "" || req.StartTime == "" || req.CustomerName == "" || req.CustomerPhone == "" || req.CustomerEmail == "" {
+	if req.ProfessionalID == "" || len(req.ServiceIDs) == 0 || req.Date == "" || req.StartTime == "" || req.CustomerName == "" || req.CustomerPhone == "" {
 		shared.RespondWithError(w, http.StatusBadRequest, "Todos os campos obrigatórios do agendamento devem ser preenchidos", nil)
 		return
 	}

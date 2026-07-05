@@ -4,14 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 
 	"barbercentral-core/internal/planlimit"
 )
 
 var (
-	ErrClientNotFound = errors.New("cliente não encontrado")
+	ErrClientNotFound         = errors.New("cliente não encontrado")
+	ErrClientUserLinkNotFound = errors.New("vínculo de usuário não encontrado")
+	ErrLinkAlreadyExists      = errors.New("este usuário já possui vínculo com esta barbearia")
 )
 
 type AdminRepository interface {
@@ -20,10 +24,16 @@ type AdminRepository interface {
 	CreateClient(ctx context.Context, c *Client) error
 	UpdateClient(ctx context.Context, c *Client) error
 	UpdateClientStatus(ctx context.Context, id, status string) error
+
 	ListClientUsers(ctx context.Context, clientID string) ([]ClientUser, error)
-	CreateClientUser(ctx context.Context, u *ClientUser, passwordHash string) error
-	UpdateClientUser(ctx context.Context, userID string, req UpdateClientUserRequest) error
-	DeleteClientUser(ctx context.Context, userID string) error
+	FindUserAccountByEmail(ctx context.Context, email string) (*UserAccountRef, error)
+	EmailExistsAsAdmin(ctx context.Context, email string) (bool, error)
+	GetUserIDByLinkID(ctx context.Context, linkID string) (string, error)
+	CreateUserWithLink(ctx context.Context, clientID string, req CreateClientUserRequest, passwordHash string) (*ClientUser, error)
+	LinkExistingUser(ctx context.Context, clientID, userID, role string) (*ClientUser, error)
+	UpdateClientUserLink(ctx context.Context, linkID string, req UpdateClientUserRequest) error
+	DeleteClientUserLink(ctx context.Context, linkID string) error
+
 	UpdateClientPlan(ctx context.Context, id, planID string) error
 	CreateBlockLog(ctx context.Context, id, clientID, action, reason, performedBy string) error
 	ListPlans(ctx context.Context) ([]planlimit.Plan, error)
@@ -91,37 +101,145 @@ func (r *adminRepository) UpdateClientStatus(ctx context.Context, id, status str
 
 func (r *adminRepository) ListClientUsers(ctx context.Context, clientID string) ([]ClientUser, error) {
 	var list []ClientUser
-	query := "SELECT id, client_id, name, email, role, status, created_at FROM client_user WHERE client_id = ? ORDER BY name ASC"
+	query := `
+		SELECT cul.id, cul.user_id, cul.client_id, ua.name, ua.email, cul.role, cul.status, cul.created_at
+		FROM client_user_link cul
+		JOIN user_account ua ON ua.id = cul.user_id
+		WHERE cul.client_id = ?
+		ORDER BY ua.name ASC
+	`
 	err := r.db.SelectContext(ctx, &list, query, clientID)
 	return list, err
 }
 
-func (r *adminRepository) CreateClientUser(ctx context.Context, u *ClientUser, passwordHash string) error {
-	query := `INSERT INTO client_user (id, client_id, name, email, password_hash, role, status, created_at)
-	          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err := r.db.ExecContext(ctx, query, u.ID, u.ClientID, u.Name, u.Email, passwordHash, u.Role, u.Status, u.CreatedAt)
-	return err
+func (r *adminRepository) FindUserAccountByEmail(ctx context.Context, email string) (*UserAccountRef, error) {
+	var u UserAccountRef
+	query := `SELECT id, name, email, status FROM user_account WHERE email = ? LIMIT 1`
+	err := r.db.GetContext(ctx, &u, query, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &u, nil
 }
 
-func (r *adminRepository) UpdateClientUser(ctx context.Context, userID string, req UpdateClientUserRequest) error {
-	var query string
-	var args []interface{}
+func (r *adminRepository) EmailExistsAsAdmin(ctx context.Context, email string) (bool, error) {
+	var count int
+	err := r.db.GetContext(ctx, &count, `SELECT COUNT(*) FROM platform_admin WHERE email = ?`, email)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
 
-	if req.PasswordHash != "" {
-		query = `UPDATE client_user SET name = ?, email = ?, role = ?, status = ?, client_id = ?, password_hash = ? WHERE id = ?`
-		args = []interface{}{req.Name, req.Email, req.Role, req.Status, req.ClientID, req.PasswordHash, userID}
-	} else {
-		query = `UPDATE client_user SET name = ?, email = ?, role = ?, status = ?, client_id = ? WHERE id = ?`
-		args = []interface{}{req.Name, req.Email, req.Role, req.Status, req.ClientID, userID}
+func (r *adminRepository) GetUserIDByLinkID(ctx context.Context, linkID string) (string, error) {
+	var userID string
+	err := r.db.GetContext(ctx, &userID, `SELECT user_id FROM client_user_link WHERE id = ?`, linkID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrClientUserLinkNotFound
+		}
+		return "", err
+	}
+	return userID, nil
+}
+
+func (r *adminRepository) CreateUserWithLink(ctx context.Context, clientID string, req CreateClientUserRequest, passwordHash string) (*ClientUser, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	userID := uuid.New().String()
+	linkID := uuid.New().String()
+	now := time.Now()
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO user_account (id, name, email, password_hash, status, created_at) VALUES (?, ?, ?, ?, 'active', ?)`,
+		userID, req.Name, req.Email, passwordHash, now)
+	if err != nil {
+		return nil, err
 	}
 
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO client_user_link (id, user_id, client_id, role, status, created_at) VALUES (?, ?, ?, ?, 'active', ?)`,
+		linkID, userID, clientID, req.Role, now)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &ClientUser{
+		ID: linkID, UserID: userID, ClientID: clientID,
+		Name: req.Name, Email: req.Email, Role: req.Role,
+		Status: "active", CreatedAt: now,
+	}, nil
+}
+
+func (r *adminRepository) LinkExistingUser(ctx context.Context, clientID, userID, role string) (*ClientUser, error) {
+	var existingCount int
+	err := r.db.GetContext(ctx, &existingCount,
+		`SELECT COUNT(*) FROM client_user_link WHERE user_id = ? AND client_id = ?`, userID, clientID)
+	if err != nil {
+		return nil, err
+	}
+	if existingCount > 0 {
+		return nil, ErrLinkAlreadyExists
+	}
+
+	linkID := uuid.New().String()
+	now := time.Now()
+	_, err = r.db.ExecContext(ctx,
+		`INSERT INTO client_user_link (id, user_id, client_id, role, status, created_at) VALUES (?, ?, ?, ?, 'active', ?)`,
+		linkID, userID, clientID, role, now)
+	if err != nil {
+		return nil, err
+	}
+
+	var acc UserAccountRef
+	_ = r.db.GetContext(ctx, &acc, `SELECT id, name, email, status FROM user_account WHERE id = ?`, userID)
+
+	return &ClientUser{
+		ID: linkID, UserID: userID, ClientID: clientID,
+		Name: acc.Name, Email: acc.Email, Role: role,
+		Status: "active", CreatedAt: now,
+	}, nil
+}
+
+func (r *adminRepository) UpdateClientUserLink(ctx context.Context, linkID string, req UpdateClientUserRequest) error {
+	userID, err := r.GetUserIDByLinkID(ctx, linkID)
+	if err != nil {
+		return err
+	}
+
+	if req.PasswordHash != "" {
+		_, err = r.db.ExecContext(ctx,
+			`UPDATE user_account SET name = ?, email = ?, password_hash = ? WHERE id = ?`,
+			req.Name, req.Email, req.PasswordHash, userID)
+	} else {
+		_, err = r.db.ExecContext(ctx,
+			`UPDATE user_account SET name = ?, email = ? WHERE id = ?`,
+			req.Name, req.Email, userID)
+	}
+	if err != nil {
+		return err
+	}
+
+	_, err = r.db.ExecContext(ctx,
+		`UPDATE client_user_link SET role = ?, status = ? WHERE id = ?`,
+		req.Role, req.Status, linkID)
 	return err
 }
 
-func (r *adminRepository) DeleteClientUser(ctx context.Context, userID string) error {
-	query := "DELETE FROM client_user WHERE id = ?"
-	res, err := r.db.ExecContext(ctx, query, userID)
+func (r *adminRepository) DeleteClientUserLink(ctx context.Context, linkID string) error {
+	query := "DELETE FROM client_user_link WHERE id = ?"
+	res, err := r.db.ExecContext(ctx, query, linkID)
 	if err != nil {
 		return err
 	}
@@ -130,7 +248,7 @@ func (r *adminRepository) DeleteClientUser(ctx context.Context, userID string) e
 		return err
 	}
 	if rows == 0 {
-		return errors.New("usuário não encontrado")
+		return ErrClientUserLinkNotFound
 	}
 	return nil
 }
@@ -163,10 +281,10 @@ func (r *adminRepository) CreatePlan(ctx context.Context, p *planlimit.Plan) err
 }
 
 func (r *adminRepository) UpdatePlan(ctx context.Context, p *planlimit.Plan) error {
-	query := `UPDATE plan 
-	          SET name = :name, max_professionals = :max_professionals, max_customers = :max_customers, max_users = :max_users, 
-	              has_loyalty = :has_loyalty, has_stock = :has_stock, has_reports = :has_reports, 
-	              has_online_booking = :has_online_booking, is_public = :is_public, price = :price 
+	query := `UPDATE plan
+	          SET name = :name, max_professionals = :max_professionals, max_customers = :max_customers, max_users = :max_users,
+	              has_loyalty = :has_loyalty, has_stock = :has_stock, has_reports = :has_reports,
+	              has_online_booking = :has_online_booking, is_public = :is_public, price = :price
 	          WHERE id = :id`
 	_, err := r.db.NamedExecContext(ctx, query, p)
 	return err
@@ -175,29 +293,32 @@ func (r *adminRepository) UpdatePlan(ctx context.Context, p *planlimit.Plan) err
 func (r *adminRepository) ListAllUsers(ctx context.Context) ([]AdminUserResponse, error) {
 	var list []AdminUserResponse
 	query := `
-		SELECT 
-			cu.id, 
-			'client' as type, 
-			cu.name, 
-			cu.email, 
-			cu.role, 
-			cu.status, 
-			cu.client_id, 
+		SELECT
+			cul.id AS id,
+			cul.user_id AS user_id,
+			'client' as type,
+			ua.name,
+			ua.email,
+			cul.role,
+			cul.status,
+			cul.client_id,
 			c.name as client_name,
-			cu.created_at 
-		FROM client_user cu
-		LEFT JOIN client c ON cu.client_id = c.id
+			cul.created_at
+		FROM client_user_link cul
+		JOIN user_account ua ON ua.id = cul.user_id
+		LEFT JOIN client c ON c.id = cul.client_id
 		UNION ALL
-		SELECT 
-			pa.id, 
-			'admin' as type, 
-			pa.name, 
-			pa.email, 
-			'admin' as role, 
-			'active' as status, 
-			'' as client_id, 
+		SELECT
+			pa.id AS id,
+			pa.id AS user_id,
+			'admin' as type,
+			pa.name,
+			pa.email,
+			'admin' as role,
+			'active' as status,
+			'' as client_id,
 			'' as client_name,
-			pa.created_at 
+			pa.created_at
 		FROM platform_admin pa
 		ORDER BY name ASC
 	`
@@ -207,8 +328,8 @@ func (r *adminRepository) ListAllUsers(ctx context.Context) ([]AdminUserResponse
 
 func (r *adminRepository) CheckEmailExists(ctx context.Context, email string, excludeID string) (bool, error) {
 	var count int
-	// Check in client_user
-	query := `SELECT COUNT(*) FROM client_user WHERE email = ? AND id != ?`
+	// Check in user_account
+	query := `SELECT COUNT(*) FROM user_account WHERE email = ? AND id != ?`
 	err := r.db.GetContext(ctx, &count, query, email, excludeID)
 	if err != nil {
 		return false, err
@@ -216,7 +337,7 @@ func (r *adminRepository) CheckEmailExists(ctx context.Context, email string, ex
 	if count > 0 {
 		return true, nil
 	}
-	
+
 	// Check in platform_admin
 	query = `SELECT COUNT(*) FROM platform_admin WHERE email = ? AND id != ?`
 	err = r.db.GetContext(ctx, &count, query, email, excludeID)
@@ -235,7 +356,7 @@ func (r *adminRepository) CreateAdminUser(ctx context.Context, id, name, email, 
 func (r *adminRepository) UpdateAdminUser(ctx context.Context, id, name, email, passwordHash string) error {
 	var query string
 	var args []interface{}
-	
+
 	if passwordHash != "" {
 		query = `UPDATE platform_admin SET name = ?, email = ?, password_hash = ? WHERE id = ?`
 		args = []interface{}{name, email, passwordHash, id}
@@ -243,7 +364,7 @@ func (r *adminRepository) UpdateAdminUser(ctx context.Context, id, name, email, 
 		query = `UPDATE platform_admin SET name = ?, email = ? WHERE id = ?`
 		args = []interface{}{name, email, id}
 	}
-	
+
 	_, err := r.db.ExecContext(ctx, query, args...)
 	return err
 }

@@ -1,6 +1,9 @@
 package clientconfig
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 type ConfigService interface {
 	GetByClientID(ctx context.Context, clientID string) (*ClientConfig, error)
@@ -8,6 +11,10 @@ type ConfigService interface {
 	GetBySlug(ctx context.Context, slug string) (*PublicClientData, error)
 	UpdateLogo(ctx context.Context, clientID, logoURL string) error
 	UpdateLogoCentral(ctx context.Context, clientID, logoURL string) error
+	// GetBrandingByClientID monta o mesmo formato de GetBySlug (config + nome/slug
+	// da barbearia), mas resolvendo o client_id pela SESSÃO autenticada em vez do
+	// slug na URL — usado pelo layout autenticado agora que não há mais subdomínio.
+	GetBrandingByClientID(ctx context.Context, clientID string) (*PublicClientData, error)
 }
 
 type configService struct {
@@ -80,4 +87,40 @@ func (s *configService) UpdateLogo(ctx context.Context, clientID, logoURL string
 
 func (s *configService) UpdateLogoCentral(ctx context.Context, clientID, logoURL string) error {
 	return s.repo.UpdateLogoCentral(ctx, clientID, logoURL)
+}
+
+func (s *configService) GetBrandingByClientID(ctx context.Context, clientID string) (*PublicClientData, error) {
+	cfg, err := s.repo.GetByClientID(ctx, clientID)
+	if err != nil {
+		if errors.Is(err, ErrConfigNotFound) {
+			cfg = &ClientConfig{
+				ClientID:                clientID,
+				ColorPrimary:            "#1a1a1a",
+				ColorSecondary:          "#c9a84c",
+				FontFamily:              "Inter",
+				Timezone:                "America/Sao_Paulo",
+				CancellationPolicyHours: 2,
+				MinAdvanceHours:         1,
+				MaxAdvanceDays:          30,
+				Active:                  1,
+			}
+		} else {
+			return nil, err
+		}
+	}
+
+	name, err := s.repo.GetClientName(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	slug, err := s.repo.GetClientSlug(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PublicClientData{
+		ClientConfig: *cfg,
+		ClientName:   name,
+		ClientSlug:   slug,
+	}, nil
 }

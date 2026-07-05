@@ -18,23 +18,29 @@ import (
 )
 
 var (
-	ErrInvalidCredentials = errors.New("credenciais inválidas")
-	ErrInvalidToken       = errors.New("token inválido")
-	ErrTokenExpired       = errors.New("token expirado")
-	ErrTokenUsed          = errors.New("token já utilizado")
-	ErrInactiveUser       = errors.New("usuário inativo")
+	ErrInvalidCredentials  = errors.New("credenciais inválidas")
+	ErrInvalidToken        = errors.New("token inválido")
+	ErrTokenExpired        = errors.New("token expirado")
+	ErrTokenUsed           = errors.New("token já utilizado")
+	ErrInactiveUser        = errors.New("usuário inativo")
+	ErrNoActiveMembership  = errors.New("nenhum vínculo ativo com barbearia")
+	ErrClientBlocked       = errors.New("barbearia suspensa ou bloqueada")
+	ErrNotImpersonating    = errors.New("esta sessão não está impersonando nenhum admin")
 )
 
 type AuthService interface {
 	Login(ctx context.Context, email, password string) (*LoginResponse, error)
 	ValidateToken(tokenStr string) (*middleware.Claims, error)
-	GetProfile(ctx context.Context, userID, role string) (*ProfileResponse, error)
+	GetProfile(ctx context.Context, userID, role, clientID, originalAdminID string) (*ProfileResponse, error)
 	ForgotPassword(ctx context.Context, email, host string) (string, error)
 	ValidateResetToken(ctx context.Context, token string) (bool, *AuthToken, error)
 	ResetPassword(ctx context.Context, token, newPassword string) (bool, error)
 	RequestMagicLink(ctx context.Context, email, host string) (string, error)
 	VerifyMagicLink(ctx context.Context, token string) (*LoginResponse, error)
 	Impersonate(ctx context.Context, adminID, targetClientID string) (string, error)
+	SwitchClient(ctx context.Context, userID, targetClientID string) (string, error)
+	MyClients(ctx context.Context, userID string) ([]ClientMembership, error)
+	ReturnToAdmin(ctx context.Context, originalAdminID string) (string, error)
 }
 
 type authService struct {
@@ -51,13 +57,37 @@ func NewAuthService(repo AuthRepository, jwtSecret string, emailClient *email.Cl
 	}
 }
 
+// resolveClientSelection decide o client_id/role iniciais do JWT com base nos
+// vínculos ativos do usuário. clientID/role vazios significam "2+ vínculos,
+// precisa escolher pelo seletor".
+func (s *authService) resolveClientSelection(ctx context.Context, userID string) (string, string, error) {
+	memberships, err := s.repo.ListActiveMemberships(ctx, userID)
+	if err != nil {
+		return "", "", err
+	}
+	if len(memberships) == 0 {
+		return "", "", ErrNoActiveMembership
+	}
+	if len(memberships) == 1 {
+		m := memberships[0]
+		status, err := s.repo.GetClientStatus(ctx, m.ClientID)
+		if err == nil && status == "blocked" {
+			return "", "", ErrClientBlocked
+		}
+		return m.ClientID, m.Role, nil
+	}
+	// 2+ vínculos ativos: frontend deve forçar o seletor de barbearia
+	return "", "", nil
+}
+
 func (s *authService) Login(ctx context.Context, emailVal, password string) (*LoginResponse, error) {
 	var user *Usuario
 	var passwordHash string
+	isAdmin := false
 
-	// Tenta admin primeiro
 	admin, err := s.repo.GetAdminByEmail(ctx, emailVal)
 	if err == nil && admin != nil {
+		isAdmin = true
 		passwordHash = admin.PasswordHash
 		user = &Usuario{
 			ID:    admin.ID,
@@ -66,36 +96,35 @@ func (s *authService) Login(ctx context.Context, emailVal, password string) (*Lo
 			Role:  "admin",
 		}
 	} else {
-		// Tenta client_user
-		cUser, err := s.repo.GetUserByEmail(ctx, emailVal)
+		acc, err := s.repo.GetUserAccountByEmail(ctx, emailVal)
 		if err != nil {
 			return nil, ErrInvalidCredentials
 		}
-		if cUser.Status != "active" {
+		if acc.Status != "active" {
 			return nil, ErrInactiveUser
 		}
-		// Verificar se a barbearia está bloqueada
-		status, err := s.repo.GetClientStatus(ctx, cUser.ClientID)
-		if err == nil && status == "blocked" {
-			return nil, errors.New("sua barbearia está suspensa ou bloqueada pelo administrador")
-		}
-
-		passwordHash = cUser.PasswordHash
+		passwordHash = acc.PasswordHash
 		user = &Usuario{
-			ID:       cUser.ID,
-			ClientID: cUser.ClientID,
-			Nome:     cUser.Name,
-			Email:    cUser.Email,
-			Role:     cUser.Role,
+			ID:    acc.ID,
+			Nome:  acc.Name,
+			Email: acc.Email,
 		}
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password))
-	if err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
 		return nil, ErrInvalidCredentials
 	}
 
-	tokenStr, err := s.generateJWT(user)
+	if !isAdmin {
+		clientID, role, err := s.resolveClientSelection(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+		user.ClientID = clientID
+		user.Role = role
+	}
+
+	tokenStr, err := s.generateJWT(user, "")
 	if err != nil {
 		return nil, err
 	}
@@ -128,34 +157,53 @@ func (s *authService) ValidateToken(tokenStr string) (*middleware.Claims, error)
 	return claims, nil
 }
 
-func (s *authService) GetProfile(ctx context.Context, userID, role string) (*ProfileResponse, error) {
-	var user *Usuario
+// GetProfile monta o perfil da sessão atual a partir do CONTEXTO da requisição
+// (client_id/role já resolvidos pelo JWT), não re-buscando vínculo no banco —
+// isso é o que permite representar corretamente um admin impersonando (que não
+// tem linha própria em client_user_link).
+func (s *authService) GetProfile(ctx context.Context, userID, role, clientID, originalAdminID string) (*ProfileResponse, error) {
 	if role == "admin" {
 		admin, err := s.repo.GetAdminByID(ctx, userID)
 		if err != nil {
 			return nil, err
 		}
-		user = &Usuario{
+		return &ProfileResponse{User: &Usuario{
 			ID:    admin.ID,
 			Nome:  admin.Name,
 			Email: admin.Email,
 			Role:  "admin",
-		}
-	} else {
-		cUser, err := s.repo.GetUserByID(ctx, userID)
+		}}, nil
+	}
+
+	if originalAdminID != "" {
+		// Admin impersonando: user_id do token é o ID real do admin (nunca muda,
+		// mesmo em impersonate encadeado), sem linha própria em client_user_link.
+		admin, err := s.repo.GetAdminByID(ctx, userID)
 		if err != nil {
 			return nil, err
 		}
-		user = &Usuario{
-			ID:       cUser.ID,
-			ClientID: cUser.ClientID,
-			Nome:     cUser.Name,
-			Email:    cUser.Email,
-			Role:     cUser.Role,
-		}
+		return &ProfileResponse{User: &Usuario{
+			ID:            admin.ID,
+			ClientID:      clientID,
+			Nome:          admin.Name,
+			Email:         admin.Email,
+			Role:          role,
+			Impersonating: true,
+		}}, nil
 	}
 
-	return &ProfileResponse{User: user}, nil
+	acc, err := s.repo.GetUserAccountByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &ProfileResponse{User: &Usuario{
+		ID:                   acc.ID,
+		ClientID:             clientID,
+		Nome:                 acc.Name,
+		Email:                acc.Email,
+		Role:                 role,
+		NeedsClientSelection: clientID == "" && role == "",
+	}}, nil
 }
 
 func (s *authService) ForgotPassword(ctx context.Context, emailVal, host string) (string, error) {
@@ -169,13 +217,13 @@ func (s *authService) ForgotPassword(ctx context.Context, emailVal, host string)
 		userType = "platform_admin"
 		userName = admin.Name
 	} else {
-		cUser, err := s.repo.GetUserByEmail(ctx, emailVal)
+		acc, err := s.repo.GetUserAccountByEmail(ctx, emailVal)
 		if err != nil {
 			return "", ErrUserNotFound
 		}
-		userID = cUser.ID
+		userID = acc.ID
 		userType = "client_user"
-		userName = cUser.Name
+		userName = acc.Name
 	}
 
 	tokenBytes := make([]byte, 32)
@@ -273,16 +321,16 @@ func (s *authService) RequestMagicLink(ctx context.Context, emailVal, host strin
 		userType = "platform_admin"
 		userName = admin.Name
 	} else {
-		cUser, err := s.repo.GetUserByEmail(ctx, emailVal)
+		acc, err := s.repo.GetUserAccountByEmail(ctx, emailVal)
 		if err != nil {
 			return "", ErrUserNotFound
 		}
-		if cUser.Status != "active" {
+		if acc.Status != "active" {
 			return "", ErrInactiveUser
 		}
-		userID = cUser.ID
+		userID = acc.ID
 		userType = "client_user"
-		userName = cUser.Name
+		userName = acc.Name
 	}
 
 	tokenBytes := make([]byte, 32)
@@ -354,30 +402,29 @@ func (s *authService) VerifyMagicLink(ctx context.Context, tokenStr string) (*Lo
 			Role:  "admin",
 		}
 	} else {
-		cUser, err := s.repo.GetUserByID(ctx, token.UserID)
+		acc, err := s.repo.GetUserAccountByID(ctx, token.UserID)
 		if err != nil {
 			return nil, err
 		}
-		if cUser.Status != "active" {
+		if acc.Status != "active" {
 			return nil, ErrInactiveUser
 		}
 
-		// Verificar se a barbearia está bloqueada
-		status, err := s.repo.GetClientStatus(ctx, cUser.ClientID)
-		if err == nil && status == "blocked" {
-			return nil, errors.New("sua barbearia está suspensa ou bloqueada pelo administrador")
+		clientID, role, err := s.resolveClientSelection(ctx, acc.ID)
+		if err != nil {
+			return nil, err
 		}
 
 		user = &Usuario{
-			ID:       cUser.ID,
-			ClientID: cUser.ClientID,
-			Nome:     cUser.Name,
-			Email:    cUser.Email,
-			Role:     cUser.Role,
+			ID:       acc.ID,
+			ClientID: clientID,
+			Nome:     acc.Name,
+			Email:    acc.Email,
+			Role:     role,
 		}
 	}
 
-	tokenJWT, err := s.generateJWT(user)
+	tokenJWT, err := s.generateJWT(user, "")
 	if err != nil {
 		return nil, err
 	}
@@ -388,13 +435,16 @@ func (s *authService) VerifyMagicLink(ctx context.Context, tokenStr string) (*Lo
 	}, nil
 }
 
-func (s *authService) generateJWT(user *Usuario) (string, error) {
+// generateJWT emite um token novo. originalAdminID, quando preenchido, marca
+// a sessão como "impersonando" (permite depois voltar para o painel admin).
+func (s *authService) generateJWT(user *Usuario, originalAdminID string) (string, error) {
 	expirationTime := time.Now().Add(12 * time.Hour)
 	claims := &middleware.Claims{
-		UserID:   user.ID,
-		Email:    user.Email,
-		Role:     user.Role,
-		ClientID: user.ClientID,
+		UserID:          user.ID,
+		Email:           user.Email,
+		Role:            user.Role,
+		ClientID:        user.ClientID,
+		OriginalAdminID: originalAdminID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -406,6 +456,11 @@ func (s *authService) generateJWT(user *Usuario) (string, error) {
 	return token.SignedString([]byte(s.jwtSecret))
 }
 
+// Impersonate reemite um JWT trocando o client_id/role para o admin "entrar"
+// numa barbearia. adminID é sempre o ID real do admin (extraído do token atual
+// pelo handler) — em impersonate encadeado (admin já impersonando pula para
+// outra barbearia), o handler já resolve isso corretamente porque o user_id do
+// token impersonado permanece o ID real do admin.
 func (s *authService) Impersonate(ctx context.Context, adminID, targetClientID string) (string, error) {
 	admin, err := s.repo.GetAdminByID(ctx, adminID)
 	if err != nil {
@@ -415,13 +470,76 @@ func (s *authService) Impersonate(ctx context.Context, adminID, targetClientID s
 		return "", errors.New("admin não encontrado")
 	}
 
+	status, err := s.repo.GetClientStatus(ctx, targetClientID)
+	if err == nil && status == "blocked" {
+		return "", ErrClientBlocked
+	}
+
 	user := &Usuario{
 		ID:       admin.ID,
 		ClientID: targetClientID,
-		Nome:     admin.Name + " (Impersonated)",
+		Nome:     admin.Name,
 		Email:    admin.Email,
 		Role:     "owner",
 	}
 
-	return s.generateJWT(user)
+	return s.generateJWT(user, adminID)
+}
+
+// SwitchClient troca a barbearia ativa de um usuário comum (não-admin) que
+// tenha 2+ vínculos, validando que o vínculo exista e esteja ativo.
+func (s *authService) SwitchClient(ctx context.Context, userID, targetClientID string) (string, error) {
+	link, err := s.repo.GetMembership(ctx, userID, targetClientID)
+	if err != nil || link.Status != "active" {
+		return "", ErrNoActiveMembership
+	}
+
+	status, err := s.repo.GetClientStatus(ctx, targetClientID)
+	if err == nil && status == "blocked" {
+		return "", ErrClientBlocked
+	}
+
+	acc, err := s.repo.GetUserAccountByID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if acc.Status != "active" {
+		return "", ErrInactiveUser
+	}
+
+	user := &Usuario{
+		ID:       acc.ID,
+		ClientID: targetClientID,
+		Nome:     acc.Name,
+		Email:    acc.Email,
+		Role:     link.Role,
+	}
+
+	return s.generateJWT(user, "")
+}
+
+func (s *authService) MyClients(ctx context.Context, userID string) ([]ClientMembership, error) {
+	return s.repo.ListMembershipsWithClient(ctx, userID)
+}
+
+// ReturnToAdmin restaura uma sessão de admin limpa a partir do OriginalAdminID
+// preservado no token impersonado.
+func (s *authService) ReturnToAdmin(ctx context.Context, originalAdminID string) (string, error) {
+	if originalAdminID == "" {
+		return "", ErrNotImpersonating
+	}
+
+	admin, err := s.repo.GetAdminByID(ctx, originalAdminID)
+	if err != nil {
+		return "", err
+	}
+
+	user := &Usuario{
+		ID:    admin.ID,
+		Nome:  admin.Name,
+		Email: admin.Email,
+		Role:  "admin",
+	}
+
+	return s.generateJWT(user, "")
 }

@@ -4,15 +4,38 @@ import "time"
 
 // Entidades do banco de dados
 
-type ClientUser struct {
+// UserAccount é a identidade global do usuário (login), independente de barbearia.
+// Antes chamada client_user (que tinha client_id/role fixos, 1:1 com uma barbearia).
+type UserAccount struct {
 	ID           string    `db:"id"`
-	ClientID     string    `db:"client_id"`
 	Name         string    `db:"name"`
 	Email        string    `db:"email"`
 	PasswordHash string    `db:"password_hash"`
-	Role         string    `db:"role"` // owner, manager, professional, receptionist
-	Status       string    `db:"status"`
+	Status       string    `db:"status"` // active, inactive, pending — status GLOBAL da conta
 	CreatedAt    time.Time `db:"created_at"`
+}
+
+// ClientUserLink é o vínculo entre um usuário e uma barbearia específica.
+// Um usuário pode ter múltiplos vínculos ativos (uma barbearia cada), cada um
+// com seu próprio role e status.
+type ClientUserLink struct {
+	ID        string    `db:"id"`
+	UserID    string    `db:"user_id"`
+	ClientID  string    `db:"client_id"`
+	Role      string    `db:"role"`   // owner, manager, professional, receptionist
+	Status    string    `db:"status"` // status DESTE vínculo específico
+	CreatedAt time.Time `db:"created_at"`
+}
+
+// ClientMembership enriquece o vínculo com dados da barbearia, usada para
+// alimentar o seletor de barbearias (GET /auth/my-clients).
+type ClientMembership struct {
+	LinkID     string `db:"link_id" json:"link_id"`
+	ClientID   string `db:"client_id" json:"client_id"`
+	ClientName string `db:"client_name" json:"client_name"`
+	ClientSlug string `db:"client_slug" json:"client_slug"`
+	Role       string `db:"role" json:"role"`
+	Status     string `db:"status" json:"status"`
 }
 
 type PlatformAdmin struct {
@@ -37,11 +60,13 @@ type AuthToken struct {
 // Representação unificada do usuário logado na sessão
 
 type Usuario struct {
-	ID       string `json:"id"`
-	ClientID string `json:"client_id,omitempty"`
-	Nome     string `json:"name"`
-	Email    string `json:"email"`
-	Role     string `json:"role"` // admin, owner, manager, professional, receptionist
+	ID                   string `json:"id"`
+	ClientID             string `json:"client_id,omitempty"`
+	Nome                 string `json:"name"`
+	Email                string `json:"email"`
+	Role                 string `json:"role"` // admin, owner, manager, professional, receptionist, ou "" (aguardando seleção)
+	Impersonating        bool   `json:"impersonating,omitempty"`
+	NeedsClientSelection bool   `json:"needs_client_selection,omitempty"`
 }
 
 // Structs de requisição e resposta para os endpoints de API
@@ -75,4 +100,12 @@ type PasswordResetConfirmRequest struct {
 
 type ProfileResponse struct {
 	User *Usuario `json:"user"`
+}
+
+type SwitchClientRequest struct {
+	ClientID string `json:"client_id"`
+}
+
+type TokenResponse struct {
+	Token string `json:"token"`
 }

@@ -25,10 +25,11 @@ var (
 )
 
 type TokenUser struct {
-	ID       string
-	Email    string
-	Role     string
-	ClientID string
+	ID              string
+	Email           string
+	Role            string
+	ClientID        string
+	OriginalAdminID string
 }
 
 type AuthValidator interface {
@@ -36,10 +37,11 @@ type AuthValidator interface {
 }
 
 type Claims struct {
-	UserID   string `json:"user_id"`
-	Email    string `json:"email"`
-	Role     string `json:"role"`
-	ClientID string `json:"client_id"`
+	UserID          string `json:"user_id"`
+	Email           string `json:"email"`
+	Role            string `json:"role"`
+	ClientID        string `json:"client_id"`
+	OriginalAdminID string `json:"original_admin_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -127,10 +129,11 @@ func RequireAuth(validator AuthValidator) func(http.Handler) http.Handler {
 			}
 
 			tokenUser := &TokenUser{
-				ID:       claims.UserID,
-				Email:    claims.Email,
-				Role:     claims.Role,
-				ClientID: claims.ClientID,
+				ID:              claims.UserID,
+				Email:           claims.Email,
+				Role:            claims.Role,
+				ClientID:        claims.ClientID,
+				OriginalAdminID: claims.OriginalAdminID,
 			}
 
 			ctx := context.WithValue(r.Context(), UserKey, tokenUser)
@@ -138,6 +141,7 @@ func RequireAuth(validator AuthValidator) func(http.Handler) http.Handler {
 			ctx = context.WithValue(ctx, "user_email", tokenUser.Email)
 			ctx = context.WithValue(ctx, "user_role", tokenUser.Role)
 			ctx = context.WithValue(ctx, "client_id", tokenUser.ClientID)
+			ctx = context.WithValue(ctx, "original_admin_id", tokenUser.OriginalAdminID)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -162,6 +166,43 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 			tokenUser, err := GetUser(r.Context())
 			if err != nil {
 				shared.RespondWithError(w, http.StatusUnauthorized, "Não autenticado", nil)
+				return
+			}
+
+			allowed := false
+			for _, role := range roles {
+				if tokenUser.Role == role {
+					allowed = true
+					break
+				}
+			}
+
+			if !allowed {
+				shared.RespondWithError(w, http.StatusForbidden, "Acesso negado: privilégios insuficientes", nil)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireRoleOrImpersonating libera o acesso tanto para quem tem um dos roles
+// exigidos, quanto para uma sessão de admin impersonando (OriginalAdminID
+// presente) — usado nas rotas que o seletor de barbearias do admin precisa
+// continuar acessando mesmo depois de já ter entrado em uma barbearia (ex:
+// listar barbearias de novo, ou impersonar outra, para "pular" de unidade).
+func RequireRoleOrImpersonating(roles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tokenUser, err := GetUser(r.Context())
+			if err != nil {
+				shared.RespondWithError(w, http.StatusUnauthorized, "Não autenticado", nil)
+				return
+			}
+
+			if tokenUser.OriginalAdminID != "" {
+				next.ServeHTTP(w, r)
 				return
 			}
 

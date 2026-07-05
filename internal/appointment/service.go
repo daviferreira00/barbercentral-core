@@ -216,15 +216,20 @@ func (s *service) GetAvailability(ctx context.Context, slug string, professional
 	}
 	weekday := int(tDate.Weekday())
 
+	profs, err := s.profRepo.List(ctx, cfg.ClientID, "active")
+	profNameByID := make(map[string]string)
+	if err == nil {
+		for _, p := range profs {
+			profNameByID[p.ID] = p.Name
+		}
+	}
+
 	var targetProfs []string
 	if professionalID != "" {
 		targetProfs = append(targetProfs, professionalID)
 	} else {
-		profs, err := s.profRepo.List(ctx, cfg.ClientID, "active")
-		if err == nil {
-			for _, p := range profs {
-				targetProfs = append(targetProfs, p.ID)
-			}
+		for _, p := range profs {
+			targetProfs = append(targetProfs, p.ID)
 		}
 	}
 
@@ -313,8 +318,10 @@ func (s *service) GetAvailability(ctx context.Context, slug string, professional
 				slotShowStart := currT.Format("15:04")
 				slotShowEnd := slotEnd.Format("15:04")
 				uniqueSlotsMap[slotShowStart] = TimeSlot{
-					StartTime: slotShowStart,
-					EndTime:   slotShowEnd,
+					StartTime:        slotShowStart,
+					EndTime:          slotShowEnd,
+					ProfessionalID:   profID,
+					ProfessionalName: profNameByID[profID],
 				}
 			}
 
@@ -342,8 +349,10 @@ func (s *service) CreatePublic(ctx context.Context, slug string, req CreatePubli
 		return nil, err
 	}
 
-	if _, err := mail.ParseAddress(req.CustomerEmail); err != nil {
-		return nil, errors.New("endereço de e-mail inválido")
+	if req.CustomerEmail != "" {
+		if _, err := mail.ParseAddress(req.CustomerEmail); err != nil {
+			return nil, errors.New("endereço de e-mail inválido")
+		}
 	}
 
 	tDate, err := time.Parse("2006-01-02", req.Date)
@@ -441,6 +450,11 @@ func (s *service) CreatePublic(ctx context.Context, slug string, req CreatePubli
 		appServices[i].AppointmentID = appID
 	}
 
+	var customerEmailPtr *string
+	if req.CustomerEmail != "" {
+		customerEmailPtr = &req.CustomerEmail
+	}
+
 	app := &Appointment{
 		ID:             appID,
 		ClientID:       cfg.ClientID,
@@ -454,7 +468,7 @@ func (s *service) CreatePublic(ctx context.Context, slug string, req CreatePubli
 		CancelToken:    &cancelToken,
 		CustomerName:   &req.CustomerName,
 		CustomerPhone:  &req.CustomerPhone,
-		CustomerEmail:  &req.CustomerEmail,
+		CustomerEmail:  customerEmailPtr,
 		ReminderSent:   0,
 		Source:         "online",
 		CreatedAt:      time.Now(),
@@ -470,7 +484,7 @@ func (s *service) CreatePublic(ctx context.Context, slug string, req CreatePubli
 		return enriched, nil
 	}
 
-	if s.emailClient != nil {
+	if s.emailClient != nil && req.CustomerEmail != "" {
 		subject := fmt.Sprintf("Agendamento Confirmado - %s", cfg.ClientName)
 		body := fmt.Sprintf(`
 			<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">

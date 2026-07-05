@@ -79,34 +79,14 @@ func (r *adminRepository) CreateClient(ctx context.Context, c *Client) error {
 
 func (r *adminRepository) UpdateClient(ctx context.Context, c *Client) error {
 	query := `UPDATE client SET plan_id = :plan_id, name = :name, slug = :slug, custom_domain = :custom_domain WHERE id = :id`
-	res, err := r.db.NamedExecContext(ctx, query, c)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ErrClientNotFound
-	}
-	return nil
+	_, err := r.db.NamedExecContext(ctx, query, c)
+	return err
 }
 
 func (r *adminRepository) UpdateClientStatus(ctx context.Context, id, status string) error {
 	query := "UPDATE client SET status = ? WHERE id = ?"
-	res, err := r.db.ExecContext(ctx, query, status, id)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ErrClientNotFound
-	}
-	return nil
+	_, err := r.db.ExecContext(ctx, query, status, id)
+	return err
 }
 
 func (r *adminRepository) ListClientUsers(ctx context.Context, clientID string) ([]ClientUser, error) {
@@ -135,18 +115,8 @@ func (r *adminRepository) UpdateClientUser(ctx context.Context, userID string, r
 		args = []interface{}{req.Name, req.Email, req.Role, req.Status, req.ClientID, userID}
 	}
 
-	res, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return errors.New("usuário não encontrado")
-	}
-	return nil
+	_, err := r.db.ExecContext(ctx, query, args...)
+	return err
 }
 
 func (r *adminRepository) DeleteClientUser(ctx context.Context, userID string) error {
@@ -167,18 +137,8 @@ func (r *adminRepository) DeleteClientUser(ctx context.Context, userID string) e
 
 func (r *adminRepository) UpdateClientPlan(ctx context.Context, id, planID string) error {
 	query := "UPDATE client SET plan_id = ? WHERE id = ?"
-	res, err := r.db.ExecContext(ctx, query, planID, id)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ErrClientNotFound
-	}
-	return nil
+	_, err := r.db.ExecContext(ctx, query, planID, id)
+	return err
 }
 
 func (r *adminRepository) CreateBlockLog(ctx context.Context, id, clientID, action, reason, performedBy string) error {
@@ -208,18 +168,8 @@ func (r *adminRepository) UpdatePlan(ctx context.Context, p *planlimit.Plan) err
 	              has_loyalty = :has_loyalty, has_stock = :has_stock, has_reports = :has_reports, 
 	              has_online_booking = :has_online_booking, is_public = :is_public, price = :price 
 	          WHERE id = :id`
-	res, err := r.db.NamedExecContext(ctx, query, p)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return errors.New("plano não encontrado")
-	}
-	return nil
+	_, err := r.db.NamedExecContext(ctx, query, p)
+	return err
 }
 
 func (r *adminRepository) ListAllUsers(ctx context.Context) ([]AdminUserResponse, error) {
@@ -294,18 +244,8 @@ func (r *adminRepository) UpdateAdminUser(ctx context.Context, id, name, email, 
 		args = []interface{}{name, email, id}
 	}
 	
-	res, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return errors.New("admin não encontrado")
-	}
-	return nil
+	_, err := r.db.ExecContext(ctx, query, args...)
+	return err
 }
 
 func (r *adminRepository) DeleteAdminUser(ctx context.Context, id string) error {

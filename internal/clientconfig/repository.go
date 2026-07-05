@@ -45,52 +45,52 @@ func (r *configRepository) GetByClientID(ctx context.Context, clientID string) (
 }
 
 func (r *configRepository) Update(ctx context.Context, cfg *ClientConfig) error {
-	query := `UPDATE client_config SET
-		logo_url = :logo_url,
-		logo_central = :logo_central,
-		color_primary = :color_primary,
-		color_secondary = :color_secondary,
-		color_button = :color_button,
-		background_type = :background_type,
-		font_family = :font_family,
-		address = :address,
-		neighborhood = :neighborhood,
-		city = :city,
-		state = :state,
-		phone = :phone,
-		whatsapp = :whatsapp,
-		instagram = :instagram,
-		timezone = :timezone,
-		cancellation_policy_hours = :cancellation_policy_hours,
-		booking_requires_login = :booking_requires_login,
-		min_advance_hours = :min_advance_hours,
-		max_advance_days = :max_advance_days,
-		interval_between_minutes = :interval_between_minutes,
-		kds_pin = :kds_pin
-		WHERE client_id = :client_id`
-	res, err := r.db.NamedExecContext(ctx, query, cfg)
+	var exists bool
+	err := r.db.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM client_config WHERE client_id = ?)", cfg.ClientID)
 	if err != nil {
 		return err
 	}
-	rows, err := res.RowsAffected()
-	if err != nil {
+
+	if exists {
+		query := `UPDATE client_config SET
+			logo_url = :logo_url,
+			logo_central = :logo_central,
+			color_primary = :color_primary,
+			color_secondary = :color_secondary,
+			color_button = :color_button,
+			background_type = :background_type,
+			font_family = :font_family,
+			address = :address,
+			neighborhood = :neighborhood,
+			city = :city,
+			state = :state,
+			phone = :phone,
+			whatsapp = :whatsapp,
+			instagram = :instagram,
+			timezone = :timezone,
+			cancellation_policy_hours = :cancellation_policy_hours,
+			booking_requires_login = :booking_requires_login,
+			min_advance_hours = :min_advance_hours,
+			max_advance_days = :max_advance_days,
+			interval_between_minutes = :interval_between_minutes,
+			kds_pin = :kds_pin
+			WHERE client_id = :client_id`
+		_, err = r.db.NamedExecContext(ctx, query, cfg)
 		return err
 	}
-	if rows == 0 {
-		// Se não existe, cria
-		queryInsert := `INSERT INTO client_config (
-			client_id, logo_url, logo_central, color_primary, color_secondary, color_button, background_type, font_family, address, neighborhood, city, state,
-			phone, whatsapp, instagram, timezone, cancellation_policy_hours, booking_requires_login,
-			min_advance_hours, max_advance_days, interval_between_minutes, active, kds_pin
-		) VALUES (
-			:client_id, :logo_url, :logo_central, :color_primary, :color_secondary, :color_button, :background_type, :font_family, :address, :neighborhood, :city, :state,
-			:phone, :whatsapp, :instagram, :timezone, :cancellation_policy_hours, :booking_requires_login,
-			:min_advance_hours, :max_advance_days, :interval_between_minutes, 1, :kds_pin
-		)`
-		_, err = r.db.NamedExecContext(ctx, queryInsert, cfg)
-		return err
-	}
-	return nil
+
+	// Se não existe, cria
+	queryInsert := `INSERT INTO client_config (
+		client_id, logo_url, logo_central, color_primary, color_secondary, color_button, background_type, font_family, address, neighborhood, city, state,
+		phone, whatsapp, instagram, timezone, cancellation_policy_hours, booking_requires_login,
+		min_advance_hours, max_advance_days, interval_between_minutes, active, kds_pin
+	) VALUES (
+		:client_id, :logo_url, :logo_central, :color_primary, :color_secondary, :color_button, :background_type, :font_family, :address, :neighborhood, :city, :state,
+		:phone, :whatsapp, :instagram, :timezone, :cancellation_policy_hours, :booking_requires_login,
+		:min_advance_hours, :max_advance_days, :interval_between_minutes, 1, :kds_pin
+	)`
+	_, err = r.db.NamedExecContext(ctx, queryInsert, cfg)
+	return err
 }
 
 func (r *configRepository) GetBySlug(ctx context.Context, slug string) (*PublicClientData, error) {
@@ -150,81 +150,81 @@ func (r *configRepository) GetBySlug(ctx context.Context, slug string) (*PublicC
 }
 
 func (r *configRepository) UpdateLogo(ctx context.Context, clientID, logoURL string) error {
-	query := "UPDATE client_config SET logo_url = ? WHERE client_id = ?"
-	res, err := r.db.ExecContext(ctx, query, logoURL, clientID)
+	var exists bool
+	err := r.db.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM client_config WHERE client_id = ?)", clientID)
 	if err != nil {
 		return err
 	}
-	rows, err := res.RowsAffected()
-	if err != nil {
+
+	if exists {
+		query := "UPDATE client_config SET logo_url = ? WHERE client_id = ?"
+		_, err = r.db.ExecContext(ctx, query, logoURL, clientID)
 		return err
 	}
-	if rows == 0 {
-		// Tenta criar com logo
-		cfg := &ClientConfig{
-			ClientID:                 clientID,
-			LogoURL:                  &logoURL,
-			ColorPrimary:             "#1a1a1a",
-			ColorSecondary:           "#c9a84c",
-			FontFamily:               "Inter",
-			Timezone:                 "America/Sao_Paulo",
-			CancellationPolicyHours: 2,
-			MinAdvanceHours:         1,
-			MaxAdvanceDays:          30,
-			Active:                   1,
-		}
-		queryInsert := `INSERT INTO client_config (
-			client_id, logo_url, color_primary, color_secondary, font_family, timezone, 
-			cancellation_policy_hours, booking_requires_login, min_advance_hours, max_advance_days, 
-			interval_between_minutes, active
-		) VALUES (
-			:client_id, :logo_url, :color_primary, :color_secondary, :font_family, :timezone, 
-			:cancellation_policy_hours, :booking_requires_login, :min_advance_hours, :max_advance_days, 
-			:interval_between_minutes, 1
-		)`
-		_, err = r.db.NamedExecContext(ctx, queryInsert, cfg)
-		return err
+
+	// Tenta criar com logo
+	cfg := &ClientConfig{
+		ClientID:                 clientID,
+		LogoURL:                  &logoURL,
+		ColorPrimary:             "#1a1a1a",
+		ColorSecondary:           "#c9a84c",
+		FontFamily:               "Inter",
+		Timezone:                 "America/Sao_Paulo",
+		CancellationPolicyHours: 2,
+		MinAdvanceHours:         1,
+		MaxAdvanceDays:          30,
+		Active:                   1,
 	}
-	return nil
+	queryInsert := `INSERT INTO client_config (
+		client_id, logo_url, color_primary, color_secondary, font_family, timezone, 
+		cancellation_policy_hours, booking_requires_login, min_advance_hours, max_advance_days, 
+		interval_between_minutes, active
+	) VALUES (
+		:client_id, :logo_url, :color_primary, :color_secondary, :font_family, :timezone, 
+		:cancellation_policy_hours, :booking_requires_login, :min_advance_hours, :max_advance_days, 
+		:interval_between_minutes, 1
+	)`
+	_, err = r.db.NamedExecContext(ctx, queryInsert, cfg)
+	return err
 }
 
 func (r *configRepository) UpdateLogoCentral(ctx context.Context, clientID, logoURL string) error {
-	query := "UPDATE client_config SET logo_central = ? WHERE client_id = ?"
-	res, err := r.db.ExecContext(ctx, query, logoURL, clientID)
+	var exists bool
+	err := r.db.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM client_config WHERE client_id = ?)", clientID)
 	if err != nil {
 		return err
 	}
-	rows, err := res.RowsAffected()
-	if err != nil {
+
+	if exists {
+		query := "UPDATE client_config SET logo_central = ? WHERE client_id = ?"
+		_, err = r.db.ExecContext(ctx, query, logoURL, clientID)
 		return err
 	}
-	if rows == 0 {
-		// Tenta criar com logo central
-		cfg := &ClientConfig{
-			ClientID:                 clientID,
-			LogoCentral:              &logoURL,
-			ColorPrimary:             "#1a1a1a",
-			ColorSecondary:           "#c9a84c",
-			FontFamily:               "Inter",
-			Timezone:                 "America/Sao_Paulo",
-			CancellationPolicyHours: 2,
-			MinAdvanceHours:         1,
-			MaxAdvanceDays:          30,
-			Active:                   1,
-		}
-		queryInsert := `INSERT INTO client_config (
-			client_id, logo_central, color_primary, color_secondary, font_family, timezone, 
-			cancellation_policy_hours, booking_requires_login, min_advance_hours, max_advance_days, 
-			interval_between_minutes, active
-		) VALUES (
-			:client_id, :logo_central, :color_primary, :color_secondary, :font_family, :timezone, 
-			:cancellation_policy_hours, :booking_requires_login, :min_advance_hours, :max_advance_days, 
-			:interval_between_minutes, 1
-		)`
-		_, err = r.db.NamedExecContext(ctx, queryInsert, cfg)
-		return err
+
+	// Tenta criar com logo central
+	cfg := &ClientConfig{
+		ClientID:                 clientID,
+		LogoCentral:              &logoURL,
+		ColorPrimary:             "#1a1a1a",
+		ColorSecondary:           "#c9a84c",
+		FontFamily:               "Inter",
+		Timezone:                 "America/Sao_Paulo",
+		CancellationPolicyHours: 2,
+		MinAdvanceHours:         1,
+		MaxAdvanceDays:          35,
+		Active:                   1,
 	}
-	return nil
+	queryInsert := `INSERT INTO client_config (
+		client_id, logo_central, color_primary, color_secondary, font_family, timezone, 
+		cancellation_policy_hours, booking_requires_login, min_advance_hours, max_advance_days, 
+		interval_between_minutes, active
+	) VALUES (
+		:client_id, :logo_central, :color_primary, :color_secondary, :font_family, :timezone, 
+		:cancellation_policy_hours, :booking_requires_login, :min_advance_hours, :max_advance_days, 
+		:interval_between_minutes, 1
+	)`
+	_, err = r.db.NamedExecContext(ctx, queryInsert, cfg)
+	return err
 }
 
 func (r *configRepository) GetClientName(ctx context.Context, clientID string) (string, error) {

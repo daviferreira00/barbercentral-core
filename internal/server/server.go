@@ -37,9 +37,6 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 		_, _ = w.Write([]byte(`{"status":"healthy"}`))
 	})
 
-	// Servidor de arquivos estáticos para fotos locais (uploads)
-	router.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
-
 	// 1. Instanciar Repositórios
 	authRepo := auth.NewAuthRepository(db)
 	profRepo := professional.NewProfessionalRepository(db)
@@ -95,6 +92,9 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 
 	// 5. Configurar Versionamento de API (/api/v1)
 	router.Route("/api/v1", func(r chi.Router) {
+		// Servidor de arquivos estáticos para fotos locais (uploads)
+		r.Handle("/uploads/*", http.StripPrefix("/api/v1/uploads/", http.FileServer(http.Dir("./uploads"))))
+
 		// Rotas públicas de auth
 		authHandler.RegisterRoutes(r)
 

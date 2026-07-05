@@ -252,7 +252,7 @@ func (h *ProfessionalHandler) UploadPhoto(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	photoURL := fmt.Sprintf("http://localhost:8080/uploads/%s", filename)
+	photoURL := fmt.Sprintf("/api/uploads/%s", filename)
 
 	err = h.service.UpdatePhoto(r.Context(), clientID, id, photoURL)
 	if err != nil {

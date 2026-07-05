@@ -112,7 +112,7 @@ func (h *ConfigHandler) UploadLogo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logoURL := fmt.Sprintf("/uploads/%s", filename)
+	logoURL := fmt.Sprintf("/api/uploads/%s", filename)
 	err = h.service.UpdateLogo(r.Context(), clientID, logoURL)
 	if err != nil {
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar logo no banco de dados", err)
@@ -157,7 +157,7 @@ func (h *ConfigHandler) UploadLogoCentral(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	logoURL := fmt.Sprintf("/uploads/%s", filename)
+	logoURL := fmt.Sprintf("/api/uploads/%s", filename)
 	err = h.service.UpdateLogoCentral(r.Context(), clientID, logoURL)
 	if err != nil {
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar logo no banco de dados", err)

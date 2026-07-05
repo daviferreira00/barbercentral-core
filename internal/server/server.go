@@ -21,6 +21,7 @@ import (
 	"barbercentral-core/internal/reports"
 	"barbercentral-core/internal/service"
 	"barbercentral-core/internal/stock"
+	"barbercentral-core/internal/shared"
 )
 
 func New(db *sqlx.DB, cfg *config.Config) http.Handler {
@@ -36,6 +37,9 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"healthy"}`))
 	})
+
+	// Servidor de arquivos estáticos para fotos locais (uploads)
+	router.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(http.Dir(shared.GetUploadsDir()))))
 
 	// 1. Instanciar Repositórios
 	authRepo := auth.NewAuthRepository(db)

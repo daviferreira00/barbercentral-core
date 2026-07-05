@@ -45,13 +45,13 @@ func (r *configRepository) GetByClientID(ctx context.Context, clientID string) (
 }
 
 func (r *configRepository) Update(ctx context.Context, cfg *ClientConfig) error {
-	var exists bool
-	err := r.db.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM client_config WHERE client_id = ?)", cfg.ClientID)
+	var count int
+	err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM client_config WHERE client_id = ?", cfg.ClientID)
 	if err != nil {
 		return err
 	}
 
-	if exists {
+	if count > 0 {
 		query := `UPDATE client_config SET
 			logo_url = :logo_url,
 			logo_central = :logo_central,
@@ -150,13 +150,13 @@ func (r *configRepository) GetBySlug(ctx context.Context, slug string) (*PublicC
 }
 
 func (r *configRepository) UpdateLogo(ctx context.Context, clientID, logoURL string) error {
-	var exists bool
-	err := r.db.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM client_config WHERE client_id = ?)", clientID)
+	var count int
+	err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM client_config WHERE client_id = ?", clientID)
 	if err != nil {
 		return err
 	}
 
-	if exists {
+	if count > 0 {
 		query := "UPDATE client_config SET logo_url = ? WHERE client_id = ?"
 		_, err = r.db.ExecContext(ctx, query, logoURL, clientID)
 		return err
@@ -189,13 +189,13 @@ func (r *configRepository) UpdateLogo(ctx context.Context, clientID, logoURL str
 }
 
 func (r *configRepository) UpdateLogoCentral(ctx context.Context, clientID, logoURL string) error {
-	var exists bool
-	err := r.db.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM client_config WHERE client_id = ?)", clientID)
+	var count int
+	err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM client_config WHERE client_id = ?", clientID)
 	if err != nil {
 		return err
 	}
 
-	if exists {
+	if count > 0 {
 		query := "UPDATE client_config SET logo_central = ? WHERE client_id = ?"
 		_, err = r.db.ExecContext(ctx, query, logoURL, clientID)
 		return err

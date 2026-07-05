@@ -82,7 +82,7 @@ type HeatmapItem struct {
 type ProfessionalHrs struct {
 	Label        string  `db:"label" json:"label"`
 	HoursAllowed float64 `json:"hours_allowed"`
-	HoursBooked  float64 `json:"hours_booked"`
+	HoursBooked  float64 `db:"hours_booked" json:"hours_booked"`
 	Percent      float64 `json:"percent"`
 	Count        int     `db:"count" json:"count"`
 }

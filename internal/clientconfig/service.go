@@ -7,6 +7,7 @@ type ConfigService interface {
 	Update(ctx context.Context, clientID string, req UpdateConfigRequest) (*ClientConfig, error)
 	GetBySlug(ctx context.Context, slug string) (*PublicClientData, error)
 	UpdateLogo(ctx context.Context, clientID, logoURL string) error
+	UpdateLogoCentral(ctx context.Context, clientID, logoURL string) error
 }
 
 type configService struct {
@@ -74,4 +75,8 @@ func (s *configService) GetBySlug(ctx context.Context, slug string) (*PublicClie
 
 func (s *configService) UpdateLogo(ctx context.Context, clientID, logoURL string) error {
 	return s.repo.UpdateLogo(ctx, clientID, logoURL)
+}
+
+func (s *configService) UpdateLogoCentral(ctx context.Context, clientID, logoURL string) error {
+	return s.repo.UpdateLogoCentral(ctx, clientID, logoURL)
 }

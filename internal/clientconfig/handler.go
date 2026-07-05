@@ -122,6 +122,51 @@ func (h *ConfigHandler) UploadLogo(w http.ResponseWriter, r *http.Request) {
 	shared.RespondWithJSON(w, http.StatusOK, map[string]string{"logo_url": logoURL})
 }
 
+func (h *ConfigHandler) UploadLogoCentral(w http.ResponseWriter, r *http.Request) {
+	clientID, _ := r.Context().Value("client_id").(string)
+
+	err := r.ParseMultipartForm(5 * 1024 * 1024) // 5MB limit
+	if err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Arquivo inválido ou muito grande", err)
+		return
+	}
+
+	file, header, err := r.FormFile("logo")
+	if err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "O campo 'logo' é obrigatório", err)
+		return
+	}
+	defer file.Close()
+
+	_ = os.MkdirAll("./uploads", 0755)
+
+	ext := filepath.Ext(header.Filename)
+	filename := fmt.Sprintf("logo_central_%s_%d%s", clientID, time.Now().Unix(), ext)
+	outPath := filepath.Join("./uploads", filename)
+
+	out, err := os.Create(outPath)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao salvar arquivo localmente", err)
+		return
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, file)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao gravar conteúdo da logo", err)
+		return
+	}
+
+	logoURL := fmt.Sprintf("/uploads/%s", filename)
+	err = h.service.UpdateLogoCentral(r.Context(), clientID, logoURL)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar logo no banco de dados", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]string{"logo_url": logoURL})
+}
+
 func (h *ConfigHandler) GetPublicData(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 

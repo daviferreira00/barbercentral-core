@@ -122,6 +122,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 			r.Get("/config", configHandler.GetConfig)
 			r.With(managerRoleLimit).Put("/config", configHandler.UpdateConfig)
 			r.With(managerRoleLimit).Post("/config/logo", configHandler.UploadLogo)
+			r.With(managerRoleLimit).Post("/config/logo-central", configHandler.UploadLogoCentral)
 
 			// Módulo de Profissionais
 			r.Get("/professionals", profHandler.List)

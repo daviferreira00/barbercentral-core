@@ -18,6 +18,7 @@ type ConfigRepository interface {
 	Update(ctx context.Context, config *ClientConfig) error
 	GetBySlug(ctx context.Context, slug string) (*PublicClientData, error)
 	UpdateLogo(ctx context.Context, clientID, logoURL string) error
+	UpdateLogoCentral(ctx context.Context, clientID, logoURL string) error
 	GetClientName(ctx context.Context, clientID string) (string, error)
 	GetClientSlug(ctx context.Context, clientID string) (string, error)
 }
@@ -177,6 +178,45 @@ func (r *configRepository) UpdateLogo(ctx context.Context, clientID, logoURL str
 			interval_between_minutes, active
 		) VALUES (
 			:client_id, :logo_url, :color_primary, :color_secondary, :font_family, :timezone, 
+			:cancellation_policy_hours, :booking_requires_login, :min_advance_hours, :max_advance_days, 
+			:interval_between_minutes, 1
+		)`
+		_, err = r.db.NamedExecContext(ctx, queryInsert, cfg)
+		return err
+	}
+	return nil
+}
+
+func (r *configRepository) UpdateLogoCentral(ctx context.Context, clientID, logoURL string) error {
+	query := "UPDATE client_config SET logo_central = ? WHERE client_id = ?"
+	res, err := r.db.ExecContext(ctx, query, logoURL, clientID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		// Tenta criar com logo central
+		cfg := &ClientConfig{
+			ClientID:                 clientID,
+			LogoCentral:              &logoURL,
+			ColorPrimary:             "#1a1a1a",
+			ColorSecondary:           "#c9a84c",
+			FontFamily:               "Inter",
+			Timezone:                 "America/Sao_Paulo",
+			CancellationPolicyHours: 2,
+			MinAdvanceHours:         1,
+			MaxAdvanceDays:          30,
+			Active:                   1,
+		}
+		queryInsert := `INSERT INTO client_config (
+			client_id, logo_central, color_primary, color_secondary, font_family, timezone, 
+			cancellation_policy_hours, booking_requires_login, min_advance_hours, max_advance_days, 
+			interval_between_minutes, active
+		) VALUES (
+			:client_id, :logo_central, :color_primary, :color_secondary, :font_family, :timezone, 
 			:cancellation_policy_hours, :booking_requires_login, :min_advance_hours, :max_advance_days, 
 			:interval_between_minutes, 1
 		)`

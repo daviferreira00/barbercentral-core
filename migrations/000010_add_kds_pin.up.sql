@@ -1,0 +1,1 @@
+ALTER TABLE client_config ADD COLUMN kds_pin VARCHAR(255) DEFAULT NULL;

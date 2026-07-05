@@ -200,6 +200,8 @@ func (h *AdminHandler) UpdateClientUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	req.ClientID = chi.URLParam(r, "id")
+
 	err := h.service.UpdateClientUser(r.Context(), userID, req)
 	if err != nil {
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar usuário", err)

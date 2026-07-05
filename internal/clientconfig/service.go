@@ -46,6 +46,7 @@ func (s *configService) Update(ctx context.Context, clientID string, req UpdateC
 		MaxAdvanceDays:          req.MaxAdvanceDays,
 		IntervalBetweenMinutes:  req.IntervalBetweenMinutes,
 		Active:                   1,
+		KDSPin:                   req.KDSPin,
 	}
 
 	if cfg.ColorPrimary == "" {

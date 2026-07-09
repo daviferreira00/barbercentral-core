@@ -1,11 +1,17 @@
 package auth
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"barbercentral-core/internal/shared"
 )
@@ -320,3 +326,118 @@ func (h *AuthHandler) ReturnToAdmin(w http.ResponseWriter, r *http.Request) {
 
 	shared.RespondWithJSON(w, http.StatusOK, TokenResponse{Token: tokenStr})
 }
+
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, ok := ctx.Value("user_id").(string)
+	userRole, _ := ctx.Value("user_role").(string)
+	if !ok || userID == "" {
+		shared.RespondWithError(w, http.StatusUnauthorized, "Não autenticado", nil)
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido", err)
+		return
+	}
+
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Senha atual e nova senha são obrigatórias", nil)
+		return
+	}
+
+	if len(req.NewPassword) < 8 {
+		shared.RespondWithError(w, http.StatusBadRequest, "A nova senha deve ter no mínimo 8 caracteres", nil)
+		return
+	}
+
+	err := h.service.ChangePassword(ctx, userID, userRole, req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, ok := ctx.Value("user_id").(string)
+	userRole, _ := ctx.Value("user_role").(string)
+	if !ok || userID == "" {
+		shared.RespondWithError(w, http.StatusUnauthorized, "Não autenticado", nil)
+		return
+	}
+
+	var req UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido", err)
+		return
+	}
+
+	if req.Name == "" || req.Email == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Nome e e-mail são obrigatórios", nil)
+		return
+	}
+
+	if req.Password != "" && len(req.Password) < 8 {
+		shared.RespondWithError(w, http.StatusBadRequest, "A nova senha deve ter no mínimo 8 caracteres", nil)
+		return
+	}
+
+	var photoURL *string
+	if req.PhotoBase64 != "" {
+		if strings.HasPrefix(req.PhotoBase64, "data:") {
+			parts := strings.SplitN(req.PhotoBase64, ",", 2)
+			if len(parts) == 2 {
+				headerPart := parts[0]
+				dataPart := parts[1]
+
+				ext := ".png"
+				if strings.Contains(headerPart, "image/jpeg") || strings.Contains(headerPart, "image/jpg") {
+					ext = ".jpg"
+				} else if strings.Contains(headerPart, "image/webp") {
+					ext = ".webp"
+				}
+
+				decoded, err := base64.StdEncoding.DecodeString(dataPart)
+				if err != nil {
+					shared.RespondWithError(w, http.StatusBadRequest, "Foto em base64 inválida", err)
+					return
+				}
+
+				err = os.MkdirAll(shared.GetUploadsDir(), os.ModePerm)
+				if err != nil {
+					shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao preparar diretório de uploads", err)
+					return
+				}
+
+				filename := fmt.Sprintf("profile-%s-%s%s", userID, uuid.New().String(), ext)
+				filePath := filepath.Join(shared.GetUploadsDir(), filename)
+
+				err = os.WriteFile(filePath, decoded, 0644)
+				if err != nil {
+					shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao gravar foto no disco", err)
+					return
+				}
+
+				pathStr := fmt.Sprintf("/uploads/%s", filename)
+				photoURL = &pathStr
+			}
+		} else if strings.HasPrefix(req.PhotoBase64, "/uploads/") {
+			pathStr := req.PhotoBase64
+			photoURL = &pathStr
+		}
+	}
+
+	tokenStr, err := h.service.UpdateProfile(ctx, userID, userRole, req.Name, req.Email, req.Password, photoURL)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, TokenResponse{Token: tokenStr})
+}
+
+

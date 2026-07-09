@@ -18,6 +18,8 @@ type AuthRepository interface {
 	GetUserAccountByEmail(ctx context.Context, email string) (*UserAccount, error)
 	GetAdminByID(ctx context.Context, id string) (*PlatformAdmin, error)
 	GetUserAccountByID(ctx context.Context, id string) (*UserAccount, error)
+	UpdateAdminProfile(ctx context.Context, id, name, email, passwordHash string, photoURL *string) error
+	UpdateUserProfile(ctx context.Context, id, name, email, passwordHash string, photoURL *string) error
 
 	// Vínculos usuário↔barbearia
 	ListActiveMemberships(ctx context.Context, userID string) ([]ClientUserLink, error)
@@ -45,7 +47,7 @@ func NewAuthRepository(db *sqlx.DB) AuthRepository {
 
 func (r *authRepository) GetAdminByEmail(ctx context.Context, email string) (*PlatformAdmin, error) {
 	var admin PlatformAdmin
-	query := `SELECT id, name, email, password_hash, created_at FROM platform_admin WHERE email = ? LIMIT 1`
+	query := `SELECT id, name, email, password_hash, created_at, photo_url FROM platform_admin WHERE email = ? LIMIT 1`
 	err := r.db.GetContext(ctx, &admin, query, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -58,7 +60,7 @@ func (r *authRepository) GetAdminByEmail(ctx context.Context, email string) (*Pl
 
 func (r *authRepository) GetUserAccountByEmail(ctx context.Context, email string) (*UserAccount, error) {
 	var user UserAccount
-	query := `SELECT id, name, email, password_hash, status, created_at FROM user_account WHERE email = ? LIMIT 1`
+	query := `SELECT id, name, email, password_hash, status, created_at, photo_url FROM user_account WHERE email = ? LIMIT 1`
 	err := r.db.GetContext(ctx, &user, query, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -71,7 +73,7 @@ func (r *authRepository) GetUserAccountByEmail(ctx context.Context, email string
 
 func (r *authRepository) GetAdminByID(ctx context.Context, id string) (*PlatformAdmin, error) {
 	var admin PlatformAdmin
-	query := `SELECT id, name, email, password_hash, created_at FROM platform_admin WHERE id = ? LIMIT 1`
+	query := `SELECT id, name, email, password_hash, created_at, photo_url FROM platform_admin WHERE id = ? LIMIT 1`
 	err := r.db.GetContext(ctx, &admin, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -84,7 +86,7 @@ func (r *authRepository) GetAdminByID(ctx context.Context, id string) (*Platform
 
 func (r *authRepository) GetUserAccountByID(ctx context.Context, id string) (*UserAccount, error) {
 	var user UserAccount
-	query := `SELECT id, name, email, password_hash, status, created_at FROM user_account WHERE id = ? LIMIT 1`
+	query := `SELECT id, name, email, password_hash, status, created_at, photo_url FROM user_account WHERE id = ? LIMIT 1`
 	err := r.db.GetContext(ctx, &user, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -179,4 +181,48 @@ func (r *authRepository) GetClientStatus(ctx context.Context, clientID string) (
 		return "", err
 	}
 	return status, nil
+}
+
+func (r *authRepository) UpdateAdminProfile(ctx context.Context, id, name, email, passwordHash string, photoURL *string) error {
+	var err error
+	if passwordHash != "" {
+		if photoURL != nil {
+			query := `UPDATE platform_admin SET name = ?, email = ?, password_hash = ?, photo_url = ? WHERE id = ?`
+			_, err = r.db.ExecContext(ctx, query, name, email, passwordHash, photoURL, id)
+		} else {
+			query := `UPDATE platform_admin SET name = ?, email = ?, password_hash = ? WHERE id = ?`
+			_, err = r.db.ExecContext(ctx, query, name, email, passwordHash, id)
+		}
+	} else {
+		if photoURL != nil {
+			query := `UPDATE platform_admin SET name = ?, email = ?, photo_url = ? WHERE id = ?`
+			_, err = r.db.ExecContext(ctx, query, name, email, photoURL, id)
+		} else {
+			query := `UPDATE platform_admin SET name = ?, email = ? WHERE id = ?`
+			_, err = r.db.ExecContext(ctx, query, name, email, id)
+		}
+	}
+	return err
+}
+
+func (r *authRepository) UpdateUserProfile(ctx context.Context, id, name, email, passwordHash string, photoURL *string) error {
+	var err error
+	if passwordHash != "" {
+		if photoURL != nil {
+			query := `UPDATE user_account SET name = ?, email = ?, password_hash = ?, photo_url = ? WHERE id = ?`
+			_, err = r.db.ExecContext(ctx, query, name, email, passwordHash, photoURL, id)
+		} else {
+			query := `UPDATE user_account SET name = ?, email = ?, password_hash = ? WHERE id = ?`
+			_, err = r.db.ExecContext(ctx, query, name, email, passwordHash, id)
+		}
+	} else {
+		if photoURL != nil {
+			query := `UPDATE user_account SET name = ?, email = ?, photo_url = ? WHERE id = ?`
+			_, err = r.db.ExecContext(ctx, query, name, email, photoURL, id)
+		} else {
+			query := `UPDATE user_account SET name = ?, email = ? WHERE id = ?`
+			_, err = r.db.ExecContext(ctx, query, name, email, id)
+		}
+	}
+	return err
 }

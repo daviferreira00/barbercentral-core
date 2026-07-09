@@ -118,6 +118,8 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 			// Identidade / seleção e troca de barbearia — não exigem client_id
 			// selecionado (usuário pode ter 0 ainda escolhido entre vários vínculos)
 			r.Get("/auth/me", authHandler.Me)
+			r.Put("/auth/profile", authHandler.UpdateProfile)
+			r.Post("/auth/change-password", authHandler.ChangePassword)
 			r.Post("/auth/switch-client", authHandler.SwitchClient)
 			r.Get("/auth/my-clients", authHandler.MyClients)
 			r.Post("/auth/return-to-admin", authHandler.ReturnToAdmin)

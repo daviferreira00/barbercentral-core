@@ -13,6 +13,7 @@ type UserAccount struct {
 	PasswordHash string    `db:"password_hash"`
 	Status       string    `db:"status"` // active, inactive, pending — status GLOBAL da conta
 	CreatedAt    time.Time `db:"created_at"`
+	PhotoURL     *string   `db:"photo_url" json:"photo_url,omitempty"`
 }
 
 // ClientUserLink é o vínculo entre um usuário e uma barbearia específica.
@@ -44,6 +45,7 @@ type PlatformAdmin struct {
 	Email        string    `db:"email"`
 	PasswordHash string    `db:"password_hash"`
 	CreatedAt    time.Time `db:"created_at"`
+	PhotoURL     *string   `db:"photo_url" json:"photo_url,omitempty"`
 }
 
 type AuthToken struct {
@@ -60,13 +62,14 @@ type AuthToken struct {
 // Representação unificada do usuário logado na sessão
 
 type Usuario struct {
-	ID                   string `json:"id"`
-	ClientID             string `json:"client_id,omitempty"`
-	Nome                 string `json:"name"`
-	Email                string `json:"email"`
-	Role                 string `json:"role"` // admin, owner, manager, professional, receptionist, ou "" (aguardando seleção)
-	Impersonating        bool   `json:"impersonating,omitempty"`
-	NeedsClientSelection bool   `json:"needs_client_selection,omitempty"`
+	ID                   string  `json:"id"`
+	ClientID             string  `json:"client_id,omitempty"`
+	Nome                 string  `json:"name"`
+	Email                string  `json:"email"`
+	Role                 string  `json:"role"` // admin, owner, manager, professional, receptionist, ou "" (aguardando seleção)
+	Impersonating        bool    `json:"impersonating,omitempty"`
+	NeedsClientSelection bool    `json:"needs_client_selection,omitempty"`
+	PhotoURL             *string `json:"photo_url,omitempty"`
 }
 
 // Structs de requisição e resposta para os endpoints de API
@@ -109,3 +112,16 @@ type SwitchClientRequest struct {
 type TokenResponse struct {
 	Token string `json:"token"`
 }
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+type UpdateProfileRequest struct {
+	Name        string `json:"name"`
+	Email       string `json:"email"`
+	Password    string `json:"password,omitempty"`
+	PhotoBase64 string `json:"photo_base64,omitempty"`
+}
+

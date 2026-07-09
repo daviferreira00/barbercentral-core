@@ -41,6 +41,8 @@ type AuthService interface {
 	SwitchClient(ctx context.Context, userID, targetClientID string) (string, error)
 	MyClients(ctx context.Context, userID string) ([]ClientMembership, error)
 	ReturnToAdmin(ctx context.Context, originalAdminID string) (string, error)
+	ChangePassword(ctx context.Context, userID, userRole, currentPassword, newPassword string) error
+	UpdateProfile(ctx context.Context, userID, userRole, name, email, newPassword string, photoURL *string) (string, error)
 }
 
 type authService struct {
@@ -90,10 +92,11 @@ func (s *authService) Login(ctx context.Context, emailVal, password string) (*Lo
 		isAdmin = true
 		passwordHash = admin.PasswordHash
 		user = &Usuario{
-			ID:    admin.ID,
-			Nome:  admin.Name,
-			Email: admin.Email,
-			Role:  "admin",
+			ID:       admin.ID,
+			Nome:     admin.Name,
+			Email:    admin.Email,
+			Role:     "admin",
+			PhotoURL: admin.PhotoURL,
 		}
 	} else {
 		acc, err := s.repo.GetUserAccountByEmail(ctx, emailVal)
@@ -105,9 +108,10 @@ func (s *authService) Login(ctx context.Context, emailVal, password string) (*Lo
 		}
 		passwordHash = acc.PasswordHash
 		user = &Usuario{
-			ID:    acc.ID,
-			Nome:  acc.Name,
-			Email: acc.Email,
+			ID:       acc.ID,
+			Nome:     acc.Name,
+			Email:    acc.Email,
+			PhotoURL: acc.PhotoURL,
 		}
 	}
 
@@ -168,10 +172,11 @@ func (s *authService) GetProfile(ctx context.Context, userID, role, clientID, or
 			return nil, err
 		}
 		return &ProfileResponse{User: &Usuario{
-			ID:    admin.ID,
-			Nome:  admin.Name,
-			Email: admin.Email,
-			Role:  "admin",
+			ID:       admin.ID,
+			Nome:     admin.Name,
+			Email:    admin.Email,
+			Role:     "admin",
+			PhotoURL: admin.PhotoURL,
 		}}, nil
 	}
 
@@ -189,6 +194,7 @@ func (s *authService) GetProfile(ctx context.Context, userID, role, clientID, or
 			Email:         admin.Email,
 			Role:          role,
 			Impersonating: true,
+			PhotoURL:      admin.PhotoURL,
 		}}, nil
 	}
 
@@ -203,6 +209,7 @@ func (s *authService) GetProfile(ctx context.Context, userID, role, clientID, or
 		Email:                acc.Email,
 		Role:                 role,
 		NeedsClientSelection: clientID == "" && role == "",
+		PhotoURL:             acc.PhotoURL,
 	}}, nil
 }
 
@@ -396,10 +403,11 @@ func (s *authService) VerifyMagicLink(ctx context.Context, tokenStr string) (*Lo
 			return nil, err
 		}
 		user = &Usuario{
-			ID:    admin.ID,
-			Nome:  admin.Name,
-			Email: admin.Email,
-			Role:  "admin",
+			ID:       admin.ID,
+			Nome:     admin.Name,
+			Email:    admin.Email,
+			Role:     "admin",
+			PhotoURL: admin.PhotoURL,
 		}
 	} else {
 		acc, err := s.repo.GetUserAccountByID(ctx, token.UserID)
@@ -421,6 +429,7 @@ func (s *authService) VerifyMagicLink(ctx context.Context, tokenStr string) (*Lo
 			Nome:     acc.Name,
 			Email:    acc.Email,
 			Role:     role,
+			PhotoURL: acc.PhotoURL,
 		}
 	}
 
@@ -481,6 +490,7 @@ func (s *authService) Impersonate(ctx context.Context, adminID, targetClientID s
 		Nome:     admin.Name,
 		Email:    admin.Email,
 		Role:     "owner",
+		PhotoURL: admin.PhotoURL,
 	}
 
 	return s.generateJWT(user, adminID)
@@ -535,11 +545,112 @@ func (s *authService) ReturnToAdmin(ctx context.Context, originalAdminID string)
 	}
 
 	user := &Usuario{
-		ID:    admin.ID,
-		Nome:  admin.Name,
-		Email: admin.Email,
-		Role:  "admin",
+		ID:       admin.ID,
+		Nome:     admin.Name,
+		Email:    admin.Email,
+		Role:     "admin",
+		PhotoURL: admin.PhotoURL,
 	}
 
 	return s.generateJWT(user, "")
 }
+
+func (s *authService) ChangePassword(ctx context.Context, userID, userRole, currentPassword, newPassword string) error {
+	var passwordHash string
+	var err error
+
+	if userRole == "admin" {
+		admin, err := s.repo.GetAdminByID(ctx, userID)
+		if err != nil {
+			return errors.New("usuário administrador não encontrado")
+		}
+		passwordHash = admin.PasswordHash
+	} else {
+		acc, err := s.repo.GetUserAccountByID(ctx, userID)
+		if err != nil {
+			return errors.New("usuário não encontrado")
+		}
+		passwordHash = acc.PasswordHash
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(currentPassword)); err != nil {
+		return errors.New("senha atual incorreta")
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("erro ao gerar hash da nova senha")
+	}
+
+	if userRole == "admin" {
+		err = s.repo.UpdateAdminPassword(ctx, userID, string(newHash))
+	} else {
+		err = s.repo.UpdateUserPassword(ctx, userID, string(newHash))
+	}
+
+	if err != nil {
+		return errors.New("erro ao atualizar a senha no banco de dados")
+	}
+
+	return nil
+}
+
+func (s *authService) UpdateProfile(ctx context.Context, userID, userRole, name, email, newPassword string, photoURL *string) (string, error) {
+	var passwordHash string
+	if newPassword != "" {
+		hashBytes, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if err != nil {
+			return "", errors.New("erro ao gerar hash da nova senha")
+		}
+		passwordHash = string(hashBytes)
+	}
+
+	var err error
+	if userRole == "admin" {
+		err = s.repo.UpdateAdminProfile(ctx, userID, name, email, passwordHash, photoURL)
+	} else {
+		err = s.repo.UpdateUserProfile(ctx, userID, name, email, passwordHash, photoURL)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	var user *Usuario
+	if userRole == "admin" {
+		admin, err := s.repo.GetAdminByID(ctx, userID)
+		if err != nil {
+			return "", err
+		}
+		user = &Usuario{
+			ID:       admin.ID,
+			Nome:     admin.Name,
+			Email:    admin.Email,
+			Role:     "admin",
+			PhotoURL: admin.PhotoURL,
+		}
+	} else {
+		acc, err := s.repo.GetUserAccountByID(ctx, userID)
+		if err != nil {
+			return "", err
+		}
+
+		clientID, role, err := s.resolveClientSelection(ctx, acc.ID)
+		if err != nil {
+			role = userRole
+		}
+
+		user = &Usuario{
+			ID:       acc.ID,
+			ClientID: clientID,
+			Nome:     acc.Name,
+			Email:    acc.Email,
+			Role:     role,
+			PhotoURL: acc.PhotoURL,
+		}
+	}
+
+	return s.generateJWT(user, "")
+}
+
+

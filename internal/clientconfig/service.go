@@ -54,6 +54,9 @@ func (s *configService) Update(ctx context.Context, clientID string, req UpdateC
 		IntervalBetweenMinutes:  req.IntervalBetweenMinutes,
 		Active:                   1,
 		KDSPin:                   req.KDSPin,
+		BlockLunchEnabled:        req.BlockLunchEnabled,
+		BlockLunchStart:          req.BlockLunchStart,
+		BlockLunchEnd:            req.BlockLunchEnd,
 	}
 
 	if cfg.ColorPrimary == "" {

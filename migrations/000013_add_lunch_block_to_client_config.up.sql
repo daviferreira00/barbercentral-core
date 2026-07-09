@@ -1,0 +1,4 @@
+ALTER TABLE client_config
+  ADD COLUMN block_lunch_enabled TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN block_lunch_start VARCHAR(8) NOT NULL DEFAULT '12:00:00',
+  ADD COLUMN block_lunch_end VARCHAR(8) NOT NULL DEFAULT '13:00:00';

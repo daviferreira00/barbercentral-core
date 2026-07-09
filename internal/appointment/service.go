@@ -272,12 +272,24 @@ func (s *service) GetAvailability(ctx context.Context, slug string, professional
 
 			collision := false
 
-			for _, b := range blocks {
-				bStart, _ := time.Parse("15:04:05", b.StartTime)
-				bEnd, _ := time.Parse("15:04:05", b.EndTime)
-				if currT.Before(bEnd) && slotEnd.After(bStart) {
-					collision = true
-					break
+			if cfg.BlockLunchEnabled == 1 {
+				lunchStart, err1 := time.Parse("15:04:05", cfg.BlockLunchStart)
+				lunchEnd, err2 := time.Parse("15:04:05", cfg.BlockLunchEnd)
+				if err1 == nil && err2 == nil {
+					if currT.Before(lunchEnd) && slotEnd.After(lunchStart) {
+						collision = true
+					}
+				}
+			}
+
+			if !collision {
+				for _, b := range blocks {
+					bStart, _ := time.Parse("15:04:05", b.StartTime)
+					bEnd, _ := time.Parse("15:04:05", b.EndTime)
+					if currT.Before(bEnd) && slotEnd.After(bStart) {
+						collision = true
+						break
+					}
 				}
 			}
 
@@ -705,6 +717,17 @@ func (s *service) Create(ctx context.Context, clientID, userID string, req Creat
 		}
 	}
 
+	// Validação com Bloqueio de Almoço global
+	if cfg.BlockLunchEnabled == 1 {
+		lunchStart, err1 := time.Parse("15:04:05", cfg.BlockLunchStart)
+		lunchEnd, err2 := time.Parse("15:04:05", cfg.BlockLunchEnd)
+		if err1 == nil && err2 == nil {
+			if startTimeParsed.Before(lunchEnd) && endTimeParsed.After(lunchStart) {
+				return nil, ErrSlotNotAvailable
+			}
+		}
+	}
+
 	// Validação com Bloqueios
 	blocks, err := s.repo.ListBlockedSlots(ctx, clientID, req.ProfessionalID, req.Date, req.Date)
 	if err == nil {
@@ -833,6 +856,17 @@ func (s *service) Update(ctx context.Context, clientID, id, userID string, req U
 			interval := time.Duration(cfg.IntervalBetweenMinutes) * time.Minute
 
 			if startTimeParsed.Before(appEnd.Add(interval)) && endTimeParsed.Add(interval).After(appStart) {
+				return nil, ErrSlotNotAvailable
+			}
+		}
+	}
+
+	// Validação com Bloqueio de Almoço global
+	if cfg.BlockLunchEnabled == 1 {
+		lunchStart, err1 := time.Parse("15:04:05", cfg.BlockLunchStart)
+		lunchEnd, err2 := time.Parse("15:04:05", cfg.BlockLunchEnd)
+		if err1 == nil && err2 == nil {
+			if startTimeParsed.Before(lunchEnd) && endTimeParsed.After(lunchStart) {
 				return nil, ErrSlotNotAvailable
 			}
 		}

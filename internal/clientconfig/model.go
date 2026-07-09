@@ -24,6 +24,9 @@ type ClientConfig struct {
 	IntervalBetweenMinutes  int     `json:"interval_between_minutes" db:"interval_between_minutes"`
 	Active                   int     `json:"active" db:"active"`
 	KDSPin                   *string `json:"kds_pin,omitempty" db:"kds_pin"`
+	BlockLunchEnabled        int     `json:"block_lunch_enabled" db:"block_lunch_enabled"`
+	BlockLunchStart          string  `json:"block_lunch_start" db:"block_lunch_start"`
+	BlockLunchEnd            string  `json:"block_lunch_end" db:"block_lunch_end"`
 }
 
 type UpdateConfigRequest struct {
@@ -48,6 +51,9 @@ type UpdateConfigRequest struct {
 	MaxAdvanceDays          int     `json:"max_advance_days"`
 	IntervalBetweenMinutes  int     `json:"interval_between_minutes"`
 	KDSPin                  *string `json:"kds_pin"`
+	BlockLunchEnabled       int     `json:"block_lunch_enabled"`
+	BlockLunchStart         string  `json:"block_lunch_start"`
+	BlockLunchEnd           string  `json:"block_lunch_end"`
 }
 
 type PublicClientData struct {

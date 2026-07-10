@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
+
+	"barbercentral-core/internal/shared"
 )
 
 type Plan struct {
@@ -237,9 +239,7 @@ func (h *LimitHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 
 	p, err := GetClientPlan(r.Context(), h.db, clientID)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"error":"erro ao carregar plano"}`))
+		shared.RespondWithError(w, http.StatusInternalServerError, "erro ao carregar plano", err)
 		return
 	}
 
@@ -252,9 +252,7 @@ func (h *LimitHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	var countUsers int
 	_ = h.db.GetContext(r.Context(), &countUsers, "SELECT COUNT(*) FROM client_user_link WHERE client_id = ? AND status = 'active'", clientID)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(UsageResponse{
+	shared.RespondWithJSON(w, http.StatusOK, UsageResponse{
 		Plan:          p,
 		Professionals: countProfs,
 		Customers:     countCustomers,

@@ -227,7 +227,7 @@ func (s *service) GetOccupancyReport(ctx context.Context, clientID string, start
 
 	// 2. Profissionais cadastrados ativos
 	var countProfs float64
-	queryCount := "SELECT COUNT(*) FROM professional WHERE client_id = ? AND active = 1"
+	queryCount := "SELECT COUNT(*) FROM professional WHERE client_id = ? AND status = 'active'"
 	var argsCount []interface{}
 	argsCount = append(argsCount, clientID)
 	if professionalID != "" {

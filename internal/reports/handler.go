@@ -1,6 +1,8 @@
 package reports
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 
 	"barbercentral-core/internal/shared"
@@ -50,7 +52,8 @@ func (h *Handler) GetOccupancyReport(w http.ResponseWriter, r *http.Request) {
 
 	rep, err := h.service.GetOccupancyReport(r.Context(), clientID, startDate, endDate, professionalID)
 	if err != nil {
-		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao gerar relatório de ocupação", err)
+		log.Printf("[DEBUG] GetOccupancyReport error for client %s: %v", clientID, err)
+		shared.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Erro ao gerar relatório de ocupação: %v", err), err)
 		return
 	}
 

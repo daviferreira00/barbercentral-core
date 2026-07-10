@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -87,11 +88,12 @@ func (h *AdminHandler) UpdateClient(w http.ResponseWriter, r *http.Request) {
 
 	c, err := h.service.UpdateClient(r.Context(), id, req)
 	if err != nil {
+		log.Printf("[DEBUG] UpdateClient error for id %s: %v", id, err)
 		if errors.Is(err, ErrClientNotFound) {
 			shared.RespondWithError(w, http.StatusNotFound, "Cliente não encontrado", err)
 			return
 		}
-		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar cliente", err)
+		shared.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Erro ao atualizar cliente: %v", err), err)
 		return
 	}
 

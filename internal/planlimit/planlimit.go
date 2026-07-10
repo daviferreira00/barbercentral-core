@@ -28,10 +28,11 @@ type Plan struct {
 }
 
 type UsageResponse struct {
-	Plan          *Plan `json:"plan"`
-	Professionals int   `json:"professionals"`
-	Customers     int   `json:"customers"`
-	Users         int   `json:"users"`
+	Plan          *Plan  `json:"plan"`
+	ClientName    string `json:"client_name"`
+	Professionals int    `json:"professionals"`
+	Customers     int    `json:"customers"`
+	Users         int    `json:"users"`
 }
 
 type ClientBlockLog struct {
@@ -252,8 +253,12 @@ func (h *LimitHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	var countUsers int
 	_ = h.db.GetContext(r.Context(), &countUsers, "SELECT COUNT(*) FROM client_user_link WHERE client_id = ? AND status = 'active'", clientID)
 
+	var clientName string
+	_ = h.db.GetContext(r.Context(), &clientName, "SELECT name FROM client WHERE id = ? LIMIT 1", clientID)
+
 	shared.RespondWithJSON(w, http.StatusOK, UsageResponse{
 		Plan:          p,
+		ClientName:    clientName,
 		Professionals: countProfs,
 		Customers:     countCustomers,
 		Users:         countUsers,

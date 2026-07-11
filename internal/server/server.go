@@ -24,6 +24,7 @@ import (
 	"barbercentral-core/internal/shared"
 	"barbercentral-core/internal/whatsapp"
 	"barbercentral-core/internal/notification"
+	"barbercentral-core/internal/chat"
 )
 
 func New(db *sqlx.DB, cfg *config.Config) http.Handler {
@@ -55,6 +56,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 	admRepo := admin.NewAdminRepository(db)
 	waRepo := whatsapp.NewRepository(db)
 	notifRepo := notification.NewRepository(db)
+	chatRepo := chat.NewRepository(db)
 
 	// 1.5. Instanciar Cliente de E-mail
 	emailClient := email.NewClient(cfg.Resend.APIKey, cfg.Resend.FromEmail)
@@ -76,6 +78,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 	reportsService := reports.NewService(db)
 	waService := whatsapp.NewService(waRepo)
 	notifService := notification.NewService(notifRepo)
+	chatService := chat.NewService(chatRepo, waRepo)
 
 	// 3. Instanciar Handlers
 	authHandler := auth.NewAuthHandler(authService)
@@ -91,6 +94,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 	reportsHandler := reports.NewHandler(reportsService)
 	waHandler := whatsapp.NewHandler(waService)
 	notifHandler := notification.NewHandler(notifService)
+	chatHandler := chat.NewHandler(chatService)
 	limitHandler := planlimit.NewLimitHandler(db)
 
 	// 4. Middlewares de Segurança
@@ -118,6 +122,9 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 
 		// Endpoint de serviço de lembretes automáticos
 		r.Post("/internal/reminders/send", appHandler.SendReminders)
+
+		// Webhook da Evolution API para Chat B2C
+		r.Post("/webhook/whatsapp", chatHandler.ProcessWebhook)
 
 		// Rotas protegidas
 		r.Group(func(r chi.Router) {
@@ -271,6 +278,11 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 				r.Get("/cliente/notificacoes/{id}", notifHandler.GetByID)
 				r.Put("/cliente/notificacoes/{id}", notifHandler.Update)
 				r.Delete("/cliente/notificacoes/{id}", notifHandler.Delete)
+
+				// Módulo de Chat B2C (Tenant)
+				r.Get("/cliente/chats", chatHandler.List)
+				r.Get("/cliente/chats/{id}/messages", chatHandler.ListMessages)
+				r.Post("/cliente/chats/send", chatHandler.SendMessage)
 			})
 
 			// Módulo Admin Geral — listar barbearias e impersonar continuam

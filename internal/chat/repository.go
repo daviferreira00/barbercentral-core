@@ -33,7 +33,7 @@ func NewRepository(db *sqlx.DB) Repository {
 }
 
 func (r *repository) ListChats(ctx context.Context, clientID string) ([]Chat, error) {
-	var list []Chat
+	list := []Chat{}
 	query := `
 		SELECT * FROM whatsapp_chat
 		WHERE client_id = ?
@@ -110,7 +110,7 @@ func (r *repository) SaveMessage(ctx context.Context, msg *Message) error {
 }
 
 func (r *repository) ListMessages(ctx context.Context, chatID string) ([]Message, error) {
-	var list []Message
+	list := []Message{}
 	query := `
 		SELECT * FROM whatsapp_message
 		WHERE chat_id = ?

@@ -60,13 +60,15 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ProcessWebhook(w http.ResponseWriter, r *http.Request) {
 	var payload WebhookPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		shared.RespondWithError(w, http.StatusBadRequest, "Payload inválido", err)
+		// Retorna 200 OK para a Evolution API em formatos de payload diferentes que ignoramos
+		shared.RespondWithJSON(w, http.StatusOK, map[string]interface{}{"processed": false, "reason": "payload format ignored"})
 		return
 	}
 
 	err := h.service.ProcessWebhook(r.Context(), payload)
 	if err != nil {
-		shared.RespondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		// Retorna 200 OK para evitar retentativas infinitas da Evolution para webhooks normais
+		shared.RespondWithJSON(w, http.StatusOK, map[string]interface{}{"processed": false, "error": err.Error()})
 		return
 	}
 

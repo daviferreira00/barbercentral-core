@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -173,8 +174,8 @@ func (s *service) ProcessWebhook(ctx context.Context, payload WebhookPayload) er
 	clientID := *inst.ClientID
 
 	remoteJid := payload.Data.Key.RemoteJid
-	if remoteJid == "" {
-		return nil
+	if remoteJid == "" || strings.Contains(remoteJid, "@g.us") {
+		return nil // Ignorar mensagens de grupo
 	}
 	contactNumber := cleanNumber(remoteJid)
 

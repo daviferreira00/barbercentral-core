@@ -17,6 +17,7 @@ type Repository interface {
 	ResetUnreadCount(ctx context.Context, clientID, chatID string) error
 	SaveMessage(ctx context.Context, msg *Message) error
 	ListMessages(ctx context.Context, chatID string) ([]Message, error)
+	HasMessage(ctx context.Context, messageID string) (bool, error)
 	UpdateChatLastMessage(ctx context.Context, chatID string, lastMessage string, incrementUnread bool) error
 
 	// Appointment helpers for buttons response automation
@@ -161,4 +162,11 @@ func (r *repository) UpdateAppointmentStatus(ctx context.Context, clientID, appo
 	query := `UPDATE appointment SET status = ? WHERE client_id = ? AND id = ?`
 	_, err := r.db.ExecContext(ctx, query, status, clientID, appointmentID)
 	return err
+}
+
+func (r *repository) HasMessage(ctx context.Context, messageID string) (bool, error) {
+	var exists bool
+	query := `SELECT EXISTS(SELECT 1 FROM whatsapp_message WHERE message_id = ?)`
+	err := r.db.GetContext(ctx, &exists, query, messageID)
+	return exists, err
 }

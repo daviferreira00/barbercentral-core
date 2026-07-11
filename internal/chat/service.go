@@ -128,6 +128,18 @@ func (s *service) SendMessage(ctx context.Context, clientID string, req SendMess
 		return nil, fmt.Errorf("Evolution API retornou status de erro: %d", resp.StatusCode)
 	}
 
+	var evoResp struct {
+		Key struct {
+			ID string `json:"id"`
+		} `json:"key"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&evoResp)
+
+	realMsgID := evoResp.Key.ID
+	if realMsgID == "" {
+		realMsgID = "out_" + uuid.New().String()[:12]
+	}
+
 	// 3. Registrar conversa e mensagem no banco local
 	contactName := req.ContactNumber
 	chat, err := s.repo.GetOrCreateChat(ctx, clientID, cleanNumber(req.ContactNumber), contactName)
@@ -138,7 +150,7 @@ func (s *service) SendMessage(ctx context.Context, clientID string, req SendMess
 	msg := &Message{
 		ID:        uuid.New().String(),
 		ChatID:    chat.ID,
-		MessageID: "out_" + uuid.New().String()[:12],
+		MessageID: realMsgID,
 		Direction: DirectionOutbound,
 		Content:   req.Content,
 		CreatedAt: time.Now(),
@@ -203,6 +215,15 @@ func (s *service) ProcessWebhook(ctx context.Context, payload WebhookPayload) er
 	chat, err := s.repo.GetOrCreateChat(ctx, clientID, contactNumber, contactName)
 	if err != nil {
 		return err
+	}
+
+	// Evitar duplicações caso a mensagem já tenha sido salva pelo endpoint de SendMessage
+	exists, err := s.repo.HasMessage(ctx, payload.Data.Key.ID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return s.repo.UpdateChatLastMessage(ctx, chat.ID, textMsg, false)
 	}
 
 	msg := &Message{

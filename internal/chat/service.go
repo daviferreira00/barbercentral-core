@@ -102,15 +102,10 @@ func (s *service) SendMessage(ctx context.Context, clientID string, req SendMess
 	// 2. Chamar Evolution API para disparar a mensagem
 	evoURL, evoKey := getEvoCredentials()
 	payload := map[string]interface{}{
-		"number": cleanNumber(req.ContactNumber),
-		"options": map[string]interface{}{
-			"delay":       1200,
-			"presence":    "composing",
-			"linkPreview": false,
-		},
-		"textMessage": map[string]interface{}{
-			"text": req.Content,
-		},
+		"number":      cleanNumber(req.ContactNumber),
+		"text":        req.Content,
+		"delay":       1200,
+		"linkPreview": false,
 	}
 
 	bodyBytes, _ := json.Marshal(payload)

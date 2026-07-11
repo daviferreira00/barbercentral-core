@@ -23,6 +23,7 @@ import (
 	"barbercentral-core/internal/stock"
 	"barbercentral-core/internal/shared"
 	"barbercentral-core/internal/whatsapp"
+	"barbercentral-core/internal/notification"
 )
 
 func New(db *sqlx.DB, cfg *config.Config) http.Handler {
@@ -53,6 +54,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 	appRepo := appointment.NewAppointmentRepository(db)
 	admRepo := admin.NewAdminRepository(db)
 	waRepo := whatsapp.NewRepository(db)
+	notifRepo := notification.NewRepository(db)
 
 	// 1.5. Instanciar Cliente de E-mail
 	emailClient := email.NewClient(cfg.Resend.APIKey, cfg.Resend.FromEmail)
@@ -73,6 +75,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 	admService := admin.NewAdminService(admRepo)
 	reportsService := reports.NewService(db)
 	waService := whatsapp.NewService(waRepo)
+	notifService := notification.NewService(notifRepo)
 
 	// 3. Instanciar Handlers
 	authHandler := auth.NewAuthHandler(authService)
@@ -87,6 +90,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 	loyaltyHandler := loyalty.NewHandler(loyaltyService)
 	reportsHandler := reports.NewHandler(reportsService)
 	waHandler := whatsapp.NewHandler(waService)
+	notifHandler := notification.NewHandler(notifService)
 	limitHandler := planlimit.NewLimitHandler(db)
 
 	// 4. Middlewares de Segurança
@@ -252,6 +256,21 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 
 				// Módulo de Planos e Indicadores de Uso do Cliente
 				r.With(ownerRoleLimit).Get("/plan/usage", limitHandler.GetUsage)
+
+				// Módulo de Canais de Envio WhatsApp (Tenant)
+				r.Get("/cliente/whatsapp", waHandler.ListClient)
+				r.Post("/cliente/whatsapp", waHandler.CreateClient)
+				r.Get("/cliente/whatsapp/connect/{name}", waHandler.ConnectClient)
+				r.Get("/cliente/whatsapp/state/{name}", waHandler.StateClient)
+				r.Delete("/cliente/whatsapp/logout/{name}", waHandler.LogoutClient)
+				r.Delete("/cliente/whatsapp/{name}", waHandler.DeleteClient)
+
+				// Módulo de Configuração de Notificações (Tenant)
+				r.Get("/cliente/notificacoes", notifHandler.List)
+				r.Post("/cliente/notificacoes", notifHandler.Create)
+				r.Get("/cliente/notificacoes/{id}", notifHandler.GetByID)
+				r.Put("/cliente/notificacoes/{id}", notifHandler.Update)
+				r.Delete("/cliente/notificacoes/{id}", notifHandler.Delete)
 			})
 
 			// Módulo Admin Geral — listar barbearias e impersonar continuam

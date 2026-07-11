@@ -11,6 +11,7 @@ import (
 
 type Repository interface {
 	ListInstances(ctx context.Context) ([]WhatsAppInstance, error)
+	ListInstancesByClientID(ctx context.Context, clientID string) ([]WhatsAppInstance, error)
 	GetInstanceByName(ctx context.Context, name string) (*WhatsAppInstance, error)
 	CreateInstance(ctx context.Context, inst *WhatsAppInstance) error
 	UpdateInstanceLink(ctx context.Context, name string, clientID, professionalID *string) error
@@ -35,6 +36,23 @@ func (r *repository) ListInstances(ctx context.Context) ([]WhatsAppInstance, err
 		ORDER BY wi.instance_name ASC
 	`
 	err := r.db.SelectContext(ctx, &list, query)
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (r *repository) ListInstancesByClientID(ctx context.Context, clientID string) ([]WhatsAppInstance, error) {
+	var list []WhatsAppInstance
+	query := `
+		SELECT wi.*, c.name AS client_name, c.slug AS client_slug, p.name AS professional_name
+		FROM whatsapp_instance wi
+		LEFT JOIN client c ON wi.client_id = c.id
+		LEFT JOIN professional p ON wi.professional_id = p.id
+		WHERE wi.client_id = ?
+		ORDER BY wi.instance_name ASC
+	`
+	err := r.db.SelectContext(ctx, &list, query, clientID)
 	if err != nil {
 		return nil, err
 	}

@@ -21,6 +21,14 @@ type Service interface {
 	LogoutInstance(ctx context.Context, name string) (any, error)
 	DeleteInstance(ctx context.Context, name string) (any, error)
 	LinkInstance(ctx context.Context, req LinkInstanceRequest) error
+
+	// Tenant isolated actions
+	ListClientInstances(ctx context.Context, clientID string) ([]WhatsAppInstance, error)
+	CreateClientInstance(ctx context.Context, clientID string, req CreateInstanceRequest) (*WhatsAppInstance, error)
+	ConnectClientInstance(ctx context.Context, clientID, name string) (any, error)
+	StateClientInstance(ctx context.Context, clientID, name string) (any, error)
+	LogoutClientInstance(ctx context.Context, clientID, name string) (any, error)
+	DeleteClientInstance(ctx context.Context, clientID, name string) (any, error)
 }
 
 type service struct {
@@ -250,4 +258,107 @@ func (s *service) LinkInstance(ctx context.Context, req LinkInstanceRequest) err
 	}
 
 	return s.repo.UpdateInstanceLink(ctx, req.InstanceName, req.ClientID, req.ProfessionalID)
+}
+
+func (s *service) validateOwnership(ctx context.Context, clientID, name string) error {
+	inst, err := s.repo.GetInstanceByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if inst == nil || inst.ClientID == nil || *inst.ClientID != clientID {
+		return fmt.Errorf("não autorizado: esta conexão não pertence à sua barbearia")
+	}
+	return nil
+}
+
+func (s *service) ListClientInstances(ctx context.Context, clientID string) ([]WhatsAppInstance, error) {
+	dbInstances, err := s.repo.ListInstancesByClientID(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+
+	evoURL, evoKey := getEvoCredentials()
+	req, err := http.NewRequestWithContext(ctx, "GET", evoURL+"/instance/fetchInstances", nil)
+	if err != nil {
+		return dbInstances, nil
+	}
+	req.Header.Set("apikey", evoKey)
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return dbInstances, nil
+	}
+	defer resp.Body.Close()
+
+	var evoList []EvoInstance
+	if resp.StatusCode == http.StatusOK {
+		_ = json.NewDecoder(resp.Body).Decode(&evoList)
+	}
+
+	dbMap := make(map[string]*WhatsAppInstance)
+	for i := range dbInstances {
+		dbMap[dbInstances[i].InstanceName] = &dbInstances[i]
+	}
+
+	var result []WhatsAppInstance
+
+	for _, evo := range evoList {
+		if dbInst, exists := dbMap[evo.Name]; exists {
+			dbInst.ConnectionStatus = evo.ConnectionStatus
+			dbInst.OwnerJid = evo.OwnerJid
+			dbInst.ProfilePicUrl = evo.ProfilePicUrl
+			dbInst.Number = evo.Number
+			result = append(result, *dbInst)
+			delete(dbMap, evo.Name)
+		}
+	}
+
+	for _, dbInst := range dbMap {
+		dbInst.ConnectionStatus = "close"
+		result = append(result, *dbInst)
+	}
+
+	return result, nil
+}
+
+func (s *service) CreateClientInstance(ctx context.Context, clientID string, req CreateInstanceRequest) (*WhatsAppInstance, error) {
+	req.ClientID = &clientID
+	// Gera um nome único no formato: bc_cli_CLIENTID_ProfessionalID ou bc_cli_CLIENTID_random
+	randomSuffix := uuid.New().String()[:8]
+	if req.ProfessionalID != nil && *req.ProfessionalID != "" {
+		req.InstanceName = fmt.Sprintf("bc_cli_%s_%s", clientID[:8], *req.ProfessionalID)
+	} else {
+		req.InstanceName = fmt.Sprintf("bc_cli_%s_%s", clientID[:8], randomSuffix)
+	}
+
+	return s.CreateInstance(ctx, req)
+}
+
+func (s *service) ConnectClientInstance(ctx context.Context, clientID, name string) (any, error) {
+	if err := s.validateOwnership(ctx, clientID, name); err != nil {
+		return nil, err
+	}
+	return s.ConnectInstance(ctx, name)
+}
+
+func (s *service) StateClientInstance(ctx context.Context, clientID, name string) (any, error) {
+	if err := s.validateOwnership(ctx, clientID, name); err != nil {
+		return nil, err
+	}
+	return s.StateInstance(ctx, name)
+}
+
+func (s *service) LogoutClientInstance(ctx context.Context, clientID, name string) (any, error) {
+	if err := s.validateOwnership(ctx, clientID, name); err != nil {
+		return nil, err
+	}
+	return s.LogoutInstance(ctx, name)
+}
+
+func (s *service) DeleteClientInstance(ctx context.Context, clientID, name string) (any, error) {
+	if err := s.validateOwnership(ctx, clientID, name); err != nil {
+		return nil, err
+	}
+	return s.DeleteInstance(ctx, name)
 }

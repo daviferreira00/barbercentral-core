@@ -131,3 +131,98 @@ func (h *Handler) Link(w http.ResponseWriter, r *http.Request) {
 
 	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
+
+func (h *Handler) ListClient(w http.ResponseWriter, r *http.Request) {
+	clientID, _ := r.Context().Value("client_id").(string)
+	list, err := h.service.ListClientInstances(r.Context(), clientID)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao listar conexões do WhatsApp", err)
+		return
+	}
+	shared.RespondWithJSON(w, http.StatusOK, list)
+}
+
+func (h *Handler) CreateClient(w http.ResponseWriter, r *http.Request) {
+	clientID, _ := r.Context().Value("client_id").(string)
+	var req CreateInstanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido", err)
+		return
+	}
+
+	inst, err := h.service.CreateClientInstance(r.Context(), clientID, req)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusCreated, inst)
+}
+
+func (h *Handler) ConnectClient(w http.ResponseWriter, r *http.Request) {
+	clientID, _ := r.Context().Value("client_id").(string)
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Nome da conexão é obrigatório", nil)
+		return
+	}
+
+	res, err := h.service.ConnectClientInstance(r.Context(), clientID, name)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) StateClient(w http.ResponseWriter, r *http.Request) {
+	clientID, _ := r.Context().Value("client_id").(string)
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Nome da conexão é obrigatório", nil)
+		return
+	}
+
+	res, err := h.service.StateClientInstance(r.Context(), clientID, name)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) LogoutClient(w http.ResponseWriter, r *http.Request) {
+	clientID, _ := r.Context().Value("client_id").(string)
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Nome da conexão é obrigatório", nil)
+		return
+	}
+
+	res, err := h.service.LogoutClientInstance(r.Context(), clientID, name)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) DeleteClient(w http.ResponseWriter, r *http.Request) {
+	clientID, _ := r.Context().Value("client_id").(string)
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Nome da conexão é obrigatório", nil)
+		return
+	}
+
+	res, err := h.service.DeleteClientInstance(r.Context(), clientID, name)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, res)
+}

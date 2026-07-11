@@ -81,14 +81,14 @@ func (r *adminRepository) GetClientByID(ctx context.Context, id string) (*Client
 }
 
 func (r *adminRepository) CreateClient(ctx context.Context, c *Client) error {
-	query := `INSERT INTO client (id, plan_id, name, slug, custom_domain, status, created_at)
-	          VALUES (:id, :plan_id, :name, :slug, :custom_domain, :status, :created_at)`
+	query := `INSERT INTO client (id, plan_id, name, slug, custom_domain, status, phone, created_at)
+	          VALUES (:id, :plan_id, :name, :slug, :custom_domain, :status, :phone, :created_at)`
 	_, err := r.db.NamedExecContext(ctx, query, c)
 	return err
 }
 
 func (r *adminRepository) UpdateClient(ctx context.Context, c *Client) error {
-	query := `UPDATE client SET plan_id = :plan_id, name = :name, slug = :slug, custom_domain = :custom_domain WHERE id = :id`
+	query := `UPDATE client SET plan_id = :plan_id, name = :name, slug = :slug, custom_domain = :custom_domain, phone = :phone WHERE id = :id`
 	_, err := r.db.NamedExecContext(ctx, query, c)
 	return err
 }

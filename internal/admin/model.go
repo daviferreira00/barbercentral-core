@@ -9,6 +9,7 @@ type Client struct {
 	Slug         string    `json:"slug" db:"slug"`
 	CustomDomain *string   `json:"custom_domain" db:"custom_domain"`
 	Status       string    `json:"status" db:"status"` // active, blocked
+	Phone        *string   `json:"phone,omitempty" db:"phone"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 }
 
@@ -39,6 +40,7 @@ type CreateClientRequest struct {
 	Name         string  `json:"name"`
 	Slug         string  `json:"slug"`
 	CustomDomain *string `json:"custom_domain"`
+	Phone        *string `json:"phone,omitempty"`
 }
 
 type UpdateClientRequest struct {
@@ -46,6 +48,7 @@ type UpdateClientRequest struct {
 	Name         string  `json:"name"`
 	Slug         string  `json:"slug"`
 	CustomDomain *string `json:"custom_domain"`
+	Phone        *string `json:"phone,omitempty"`
 }
 
 type CreateClientUserRequest struct {

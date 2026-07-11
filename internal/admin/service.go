@@ -63,6 +63,7 @@ func (s *adminService) CreateClient(ctx context.Context, req CreateClientRequest
 		Slug:         req.Slug,
 		CustomDomain: req.CustomDomain,
 		Status:       "active",
+		Phone:        req.Phone,
 		CreatedAt:    time.Now(),
 	}
 
@@ -84,6 +85,7 @@ func (s *adminService) UpdateClient(ctx context.Context, id string, req UpdateCl
 	c.Name = req.Name
 	c.Slug = req.Slug
 	c.CustomDomain = req.CustomDomain
+	c.Phone = req.Phone
 
 	err = s.repo.UpdateClient(ctx, c)
 	if err != nil {

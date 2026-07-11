@@ -22,6 +22,7 @@ import (
 	"barbercentral-core/internal/service"
 	"barbercentral-core/internal/stock"
 	"barbercentral-core/internal/shared"
+	"barbercentral-core/internal/whatsapp"
 )
 
 func New(db *sqlx.DB, cfg *config.Config) http.Handler {
@@ -51,6 +52,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 	stockRepo := stock.NewRepository(db)
 	appRepo := appointment.NewAppointmentRepository(db)
 	admRepo := admin.NewAdminRepository(db)
+	waRepo := whatsapp.NewRepository(db)
 
 	// 1.5. Instanciar Cliente de E-mail
 	emailClient := email.NewClient(cfg.Resend.APIKey, cfg.Resend.FromEmail)
@@ -70,6 +72,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 	appService := appointment.NewService(appRepo, configRepo, profRepo, svcRepo, emailClient, custService, stockService, loyaltyService)
 	admService := admin.NewAdminService(admRepo)
 	reportsService := reports.NewService(db)
+	waService := whatsapp.NewService(waRepo)
 
 	// 3. Instanciar Handlers
 	authHandler := auth.NewAuthHandler(authService)
@@ -83,6 +86,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 	admHandler := admin.NewAdminHandler(admService)
 	loyaltyHandler := loyalty.NewHandler(loyaltyService)
 	reportsHandler := reports.NewHandler(reportsService)
+	waHandler := whatsapp.NewHandler(waService)
 	limitHandler := planlimit.NewLimitHandler(db)
 
 	// 4. Middlewares de Segurança
@@ -275,6 +279,14 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 				r.Get("/admin/clients/{id}/config", configHandler.GetConfigByClientID)
 				r.Put("/admin/clients/{id}/config", configHandler.UpdateConfigByClientID)
 				r.Post("/admin/upload", admHandler.UploadFile)
+
+				r.Get("/admin/whatsapp", waHandler.List)
+				r.Post("/admin/whatsapp", waHandler.Create)
+				r.Post("/admin/whatsapp/link", waHandler.Link)
+				r.Get("/admin/whatsapp/connect/{name}", waHandler.Connect)
+				r.Get("/admin/whatsapp/state/{name}", waHandler.State)
+				r.Delete("/admin/whatsapp/logout/{name}", waHandler.Logout)
+				r.Delete("/admin/whatsapp/{name}", waHandler.Delete)
 
 				r.Get("/admin/users", admHandler.ListAllUsers)
 				r.Post("/admin/users", admHandler.CreateUser)

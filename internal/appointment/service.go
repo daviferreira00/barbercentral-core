@@ -1069,7 +1069,7 @@ func (s *service) SendVerificationCodeOTP(ctx context.Context, slug, phone, code
 	}
 
 	formattedCode := fmt.Sprintf("%s %s", code[:3], code[3:])
-	msgText := fmt.Sprintf("*BarberCentral* — CHAVE DESCARTÁVEL\n\nSeu código de confirmação é: *%s*\n\nEle serve para validar o seu agendamento no BarberCentral e expira em 10 minutos. Não compartilhe este código.", formattedCode)
+	msgText := fmt.Sprintf("*BarberCentral*\nAqui está seu código de confirmação:\n*%s*", formattedCode)
 
 	_, err = s.chatService.SendMessage(ctx, cfg.ClientID, chat.SendMessageRequest{
 		ContactNumber: phone,

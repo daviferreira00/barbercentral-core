@@ -38,6 +38,7 @@ type Service interface {
 	GetByCancelToken(ctx context.Context, token string) (*EnrichedAppointment, error)
 	CancelByToken(ctx context.Context, token string) error
 	SendUpcomingReminders(ctx context.Context) (int, error)
+	SendConfirmationButtons(ctx context.Context, clientID, id string) error
 
 	SendWhatsAppNotification(ctx context.Context, slug, phone, message string) error
 
@@ -1022,4 +1023,38 @@ func (s *service) GetAvailabilityInternal(ctx context.Context, clientID, profess
 		return nil, err
 	}
 	return s.GetAvailability(ctx, slug, professionalID, serviceIDs, date)
+}
+
+func (s *service) SendConfirmationButtons(ctx context.Context, clientID, id string) error {
+	app, err := s.repo.GetByID(ctx, clientID, id)
+	if err != nil {
+		return err
+	}
+
+	if app.CustomerPhone == nil || *app.CustomerPhone == "" {
+		return errors.New("cliente não possui número de telefone cadastrado")
+	}
+
+	dateFormatted := ""
+	tDate, err := time.Parse("2006-01-02", app.Date)
+	if err == nil {
+		dateFormatted = tDate.Format("02/01/2006")
+	} else {
+		dateFormatted = app.Date
+	}
+	timeFormatted := app.StartTime[:5]
+	servicesStr := ""
+	for i, srv := range app.Services {
+		if i > 0 {
+			servicesStr += ", "
+		}
+		servicesStr += srv.ServiceName
+	}
+
+	title := fmt.Sprintf("Agendamento - %s", dateFormatted)
+	text := fmt.Sprintf("Olá, %s! Seu agendamento está marcado para %s às %s com o profissional %s.\n\nServiços: %s.\n\nPor favor, confirme ou cancele o seu horário nos botões abaixo:",
+		*app.CustomerName, dateFormatted, timeFormatted, app.ProfessionalName, servicesStr)
+	footer := "Selecione uma das opções:"
+
+	return s.chatService.SendButtonsMessage(ctx, clientID, *app.CustomerPhone, title, text, footer)
 }

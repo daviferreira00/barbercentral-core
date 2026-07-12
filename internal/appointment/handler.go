@@ -445,9 +445,10 @@ func (h *AppointmentHandler) SendVerificationCode(w http.ResponseWriter, r *http
 
 	// Generate 6-digit code
 	code := fmt.Sprintf("%06d", rand.Intn(1000000))
+	formattedCode := fmt.Sprintf("%s %s", code[:3], code[3:])
 
 	// Send WhatsApp message
-	msg := fmt.Sprintf("Seu código de confirmação para o agendamento no BarberCentral é: %s", code)
+	msg := fmt.Sprintf("*BarberCentral* — CHAVE DESCARTÁVEL\n\nSeu código de confirmação é: *%s*\n\nUse este código para confirmar o seu agendamento. Ele é válido por 10 minutos. Não o compartilhe com ninguém.", formattedCode)
 	err := h.service.SendWhatsAppNotification(r.Context(), slug, cleanPhone, msg)
 	if err != nil {
 		shared.RespondWithError(w, http.StatusInternalServerError, "Falha ao enviar código por WhatsApp: "+err.Error(), err)
@@ -482,5 +483,18 @@ func (h *AppointmentHandler) VerifyCode(w http.ResponseWriter, r *http.Request) 
 	}
 
 	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"verified": true})
+}
+
+func (h *AppointmentHandler) SendConfirmationButtons(w http.ResponseWriter, r *http.Request) {
+	clientID, _ := r.Context().Value("client_id").(string)
+	id := chi.URLParam(r, "id")
+
+	err := h.service.SendConfirmationButtons(r.Context(), clientID, id)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao disparar botões de confirmação: "+err.Error(), err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

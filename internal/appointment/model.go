@@ -50,10 +50,10 @@ type EnrichedAppointment struct {
 }
 
 type EnrichedAppService struct {
-	ServiceID   string  `json:"service_id"`
-	ServiceName string  `json:"service_name"`
-	Price       float64 `json:"price"`
-	Duration    int     `json:"duration_minutes"`
+	ServiceID   string  `json:"service_id" db:"service_id"`
+	ServiceName string  `json:"service_name" db:"service_name"`
+	Price       float64 `json:"price" db:"price"`
+	Duration    int     `json:"duration_minutes" db:"duration_minutes"`
 }
 
 type CreateBlockedSlotRequest struct {

@@ -256,6 +256,16 @@ func (s *service) ProcessWebhook(ctx context.Context, payload WebhookPayload) er
 		return err
 	}
 
+	// Se for resposta de texto do cliente, processa como confirmação ou cancelamento
+	if direction == DirectionInbound {
+		cleanText := strings.TrimSpace(strings.ToUpper(textMsg))
+		if cleanText == "SIM" || cleanText == "1" || cleanText == "CONFIRMAR" || cleanText == "CONFIRMO" {
+			_ = s.processButtonResponse(ctx, clientID, contactNumber, "confirm_appointment")
+		} else if cleanText == "NÃO" || cleanText == "NAO" || cleanText == "2" || cleanText == "CANCELAR" || cleanText == "CANCELA" {
+			_ = s.processButtonResponse(ctx, clientID, contactNumber, "cancel_appointment")
+		}
+	}
+
 	incrementUnread := (direction == DirectionInbound)
 	return s.repo.UpdateChatLastMessage(ctx, chat.ID, textMsg, incrementUnread)
 }

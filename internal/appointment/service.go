@@ -1052,12 +1052,14 @@ func (s *service) SendConfirmationButtons(ctx context.Context, clientID, id stri
 		servicesStr += srv.ServiceName
 	}
 
-	title := fmt.Sprintf("Agendamento - %s", dateFormatted)
-	text := fmt.Sprintf("Olá, %s! Seu agendamento está marcado para %s às %s com o profissional %s.\n\nServiços: %s.\n\nPor favor, confirme ou cancele o seu horário nos botões abaixo:",
+	msgText := fmt.Sprintf("*BarberCentral* — CONFIRMAÇÃO DE HORÁRIO\n\nOlá, %s!\n\nSeu agendamento está marcado para *%s* às *%s* com o profissional *%s*.\n\nServiços: %s.\n\nPor favor, *confirme* o seu horário respondendo a esta mensagem:\n👉 Digite *SIM* ou *1* para *Confirmar*\n👉 Digite *NÃO* ou *2* para *Cancelar*",
 		*app.CustomerName, dateFormatted, timeFormatted, app.ProfessionalName, servicesStr)
-	footer := "Selecione uma das opções:"
 
-	return s.chatService.SendButtonsMessage(ctx, clientID, *app.CustomerPhone, title, text, footer)
+	_, err = s.chatService.SendMessage(ctx, clientID, chat.SendMessageRequest{
+		ContactNumber: *app.CustomerPhone,
+		Content:       msgText,
+	})
+	return err
 }
 
 func (s *service) SendVerificationCodeOTP(ctx context.Context, slug, phone, code string) error {
@@ -1067,10 +1069,11 @@ func (s *service) SendVerificationCodeOTP(ctx context.Context, slug, phone, code
 	}
 
 	formattedCode := fmt.Sprintf("%s %s", code[:3], code[3:])
-	title := "Chave Descartável"
-	msg := fmt.Sprintf("Seu código de confirmação é: *%s*\n\nEle serve para validar o seu agendamento no BarberCentral e expira em 10 minutos.", formattedCode)
-	footer := "Não compartilhe este código."
-	buttonText := fmt.Sprintf("Código: %s", formattedCode)
+	msgText := fmt.Sprintf("*BarberCentral* — CHAVE DESCARTÁVEL\n\nSeu código de confirmação é: *%s*\n\nEle serve para validar o seu agendamento no BarberCentral e expira em 10 minutos. Não compartilhe este código.", formattedCode)
 
-	return s.chatService.SendOTPButtonsMessage(ctx, cfg.ClientID, phone, title, msg, footer, buttonText)
+	_, err = s.chatService.SendMessage(ctx, cfg.ClientID, chat.SendMessageRequest{
+		ContactNumber: phone,
+		Content:       msgText,
+	})
+	return err
 }

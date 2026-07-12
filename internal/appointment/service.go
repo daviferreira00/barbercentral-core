@@ -167,7 +167,11 @@ func (s *service) UpdateStatus(ctx context.Context, clientID, id, status, userID
 	// Notifica cliente se confirmado pelo barbeiro
 	if status == "confirmed" && app.CustomerPhone != nil && *app.CustomerPhone != "" {
 		dateFormatted := ""
-		tDate, err := time.Parse("2006-01-02", app.Date)
+		dateStr := app.Date
+		if len(dateStr) >= 10 {
+			dateStr = dateStr[:10]
+		}
+		tDate, err := time.Parse("2006-01-02", dateStr)
 		if err == nil {
 			dateFormatted = tDate.Format("02/01/2006")
 		} else {
@@ -581,7 +585,11 @@ func (s *service) CreatePublic(ctx context.Context, slug string, req CreatePubli
 	// Envia WhatsApp automático de criação/recebimento
 	if enriched.CustomerPhone != nil && *enriched.CustomerPhone != "" {
 		dateFormatted := ""
-		tDate, err := time.Parse("2006-01-02", enriched.Date)
+		dateStr := enriched.Date
+		if len(dateStr) >= 10 {
+			dateStr = dateStr[:10]
+		}
+		tDate, err := time.Parse("2006-01-02", dateStr)
 		if err == nil {
 			dateFormatted = tDate.Format("02/01/2006")
 		} else {
@@ -1037,7 +1045,11 @@ func (s *service) SendConfirmationButtons(ctx context.Context, clientID, id stri
 	}
 
 	dateFormatted := ""
-	tDate, err := time.Parse("2006-01-02", app.Date)
+	dateStr := app.Date
+	if len(dateStr) >= 10 {
+		dateStr = dateStr[:10]
+	}
+	tDate, err := time.Parse("2006-01-02", dateStr)
 	if err == nil {
 		dateFormatted = tDate.Format("02/01/2006")
 	} else {

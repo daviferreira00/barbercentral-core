@@ -286,6 +286,9 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 				r.Get("/cliente/chats", chatHandler.List)
 				r.Get("/cliente/chats/{id}/messages", chatHandler.ListMessages)
 				r.Post("/cliente/chats/send", chatHandler.SendMessage)
+
+				// Fallback route para compatibilidade
+				r.Post("/cliente/appointments/{id}/confirm-buttons", appHandler.SendConfirmationButtons)
 			})
 
 			// Módulo Admin Geral — listar barbearias e impersonar continuam

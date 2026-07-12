@@ -314,10 +314,12 @@ func (s *service) SendButtonsMessage(ctx context.Context, clientID, number, titl
 		"footer":      footer,
 		"buttons": []map[string]interface{}{
 			{
+				"type":        "reply",
 				"id":          "confirm_appointment",
 				"displayText": "Confirmar",
 			},
 			{
+				"type":        "reply",
 				"id":          "cancel_appointment",
 				"displayText": "Cancelar",
 			},
@@ -426,6 +428,7 @@ func (s *service) SendOTPButtonsMessage(ctx context.Context, clientID, number, t
 		"footer":      footer,
 		"buttons": []map[string]interface{}{
 			{
+				"type":        "reply",
 				"id":          "otp_confirm",
 				"displayText": buttonText,
 			},

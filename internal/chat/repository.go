@@ -19,6 +19,7 @@ type Repository interface {
 	ListMessages(ctx context.Context, chatID string) ([]Message, error)
 	HasMessage(ctx context.Context, messageID string) (bool, error)
 	UpdateChatLastMessage(ctx context.Context, chatID string, lastMessage string, incrementUnread bool) error
+	UpdateChatMetadata(ctx context.Context, chatID string, whatsappName string, profilePicUrl string) error
 
 	// Appointment helpers for buttons response automation
 	GetLatestPendingAppointment(ctx context.Context, clientID, cleanPhone string) (string, error)
@@ -36,9 +37,19 @@ func NewRepository(db *sqlx.DB) Repository {
 func (r *repository) ListChats(ctx context.Context, clientID string) ([]Chat, error) {
 	list := []Chat{}
 	query := `
-		SELECT * FROM whatsapp_chat
-		WHERE client_id = ?
-		ORDER BY updated_at DESC
+		SELECT 
+			c.*, 
+			cust.id as customer_id, 
+			cust.name as customer_name
+		FROM whatsapp_chat c
+		LEFT JOIN customer cust ON cust.client_id = c.client_id AND (
+			cust.phone = c.contact_number OR
+			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = c.contact_number OR
+			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = SUBSTRING(c.contact_number, 3) OR
+			CONCAT('55', REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '')) = c.contact_number
+		)
+		WHERE c.client_id = ?
+		ORDER BY c.updated_at DESC
 	`
 	err := r.db.SelectContext(ctx, &list, query, clientID)
 	return list, err
@@ -46,7 +57,20 @@ func (r *repository) ListChats(ctx context.Context, clientID string) ([]Chat, er
 
 func (r *repository) GetChatByID(ctx context.Context, clientID, chatID string) (*Chat, error) {
 	var c Chat
-	query := `SELECT * FROM whatsapp_chat WHERE client_id = ? AND id = ?`
+	query := `
+		SELECT 
+			c.*, 
+			cust.id as customer_id, 
+			cust.name as customer_name
+		FROM whatsapp_chat c
+		LEFT JOIN customer cust ON cust.client_id = c.client_id AND (
+			cust.phone = c.contact_number OR
+			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = c.contact_number OR
+			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = SUBSTRING(c.contact_number, 3) OR
+			CONCAT('55', REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '')) = c.contact_number
+		)
+		WHERE c.client_id = ? AND c.id = ?
+	`
 	err := r.db.GetContext(ctx, &c, query, clientID, chatID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -59,7 +83,20 @@ func (r *repository) GetChatByID(ctx context.Context, clientID, chatID string) (
 
 func (r *repository) GetOrCreateChat(ctx context.Context, clientID, contactNumber, contactName string) (*Chat, error) {
 	var c Chat
-	querySelect := `SELECT * FROM whatsapp_chat WHERE client_id = ? AND contact_number = ?`
+	querySelect := `
+		SELECT 
+			c.*, 
+			cust.id as customer_id, 
+			cust.name as customer_name
+		FROM whatsapp_chat c
+		LEFT JOIN customer cust ON cust.client_id = c.client_id AND (
+			cust.phone = c.contact_number OR
+			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = c.contact_number OR
+			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = SUBSTRING(c.contact_number, 3) OR
+			CONCAT('55', REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '')) = c.contact_number
+		)
+		WHERE c.client_id = ? AND c.contact_number = ?
+	`
 	err := r.db.GetContext(ctx, &c, querySelect, clientID, contactNumber)
 	if err == nil {
 		return &c, nil
@@ -169,4 +206,16 @@ func (r *repository) HasMessage(ctx context.Context, messageID string) (bool, er
 	query := `SELECT EXISTS(SELECT 1 FROM whatsapp_message WHERE message_id = ?)`
 	err := r.db.GetContext(ctx, &exists, query, messageID)
 	return exists, err
+}
+
+func (r *repository) UpdateChatMetadata(ctx context.Context, chatID string, whatsappName string, profilePicUrl string) error {
+	query := `
+		UPDATE whatsapp_chat 
+		SET 
+			whatsapp_name = COALESCE(NULLIF(?, ''), whatsapp_name), 
+			profile_pic_url = COALESCE(NULLIF(?, ''), profile_pic_url) 
+		WHERE id = ?
+	`
+	_, err := r.db.ExecContext(ctx, query, whatsappName, profilePicUrl, chatID)
+	return err
 }

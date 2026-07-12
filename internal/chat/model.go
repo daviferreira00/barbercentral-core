@@ -17,6 +17,12 @@ type Chat struct {
 	UnreadCount   int       `json:"unread_count" db:"unread_count"`
 	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
 	CreatedAt     time.Time `json:"created_at" db:"created_at"`
+
+	// Campos enriquecidos / WhatsApp metadata
+	ProfilePicUrl *string   `json:"profile_pic_url,omitempty" db:"profile_pic_url"`
+	WhatsAppName  *string   `json:"whatsapp_name,omitempty" db:"whatsapp_name"`
+	CustomerID    *string   `json:"customer_id,omitempty" db:"customer_id"`
+	CustomerName  *string   `json:"customer_name,omitempty" db:"customer_name"`
 }
 
 type Message struct {

@@ -147,6 +147,11 @@ func (s *service) SendMessage(ctx context.Context, clientID string, req SendMess
 		return nil, err
 	}
 
+	// Busca e salva a foto do perfil assincronamente se ainda não estiver preenchida
+	if chat.ProfilePicUrl == nil || *chat.ProfilePicUrl == "" {
+		go s.fetchAndSaveProfilePic(activeInst.InstanceName, req.ContactNumber, chat.ID)
+	}
+
 	msg := &Message{
 		ID:        uuid.New().String(),
 		ChatID:    chat.ID,
@@ -215,6 +220,16 @@ func (s *service) ProcessWebhook(ctx context.Context, payload WebhookPayload) er
 	chat, err := s.repo.GetOrCreateChat(ctx, clientID, contactNumber, contactName)
 	if err != nil {
 		return err
+	}
+
+	// Atualiza o pushName da conversa se recebermos um pushName válido no webhook
+	if payload.Data.PushName != "" {
+		_ = s.repo.UpdateChatMetadata(ctx, chat.ID, payload.Data.PushName, "")
+	}
+
+	// Busca e salva a foto do perfil assincronamente se ainda não estiver preenchida
+	if chat.ProfilePicUrl == nil || *chat.ProfilePicUrl == "" {
+		go s.fetchAndSaveProfilePic(payload.Instance, contactNumber, chat.ID)
 	}
 
 	// Evitar duplicações caso a mensagem já tenha sido salva pelo endpoint de SendMessage
@@ -344,4 +359,42 @@ func (s *service) SendButtonsMessage(ctx context.Context, clientID, number, titl
 	}
 
 	return nil
+}
+
+func (s *service) fetchAndSaveProfilePic(instanceName string, number string, chatID string) {
+	// Cria um contexto limpo com timeout de 10s para rodar em background
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	evoURL, evoKey := getEvoCredentials()
+	postURL := fmt.Sprintf("%s/chat/fetchProfilePicture/%s", evoURL, instanceName)
+	payload := map[string]string{
+		"number": cleanNumber(number),
+	}
+	bodyBytes, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, "POST", postURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return
+	}
+	req.Header.Set("apikey", evoKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return
+	}
+
+	var result struct {
+		ProfilePicUrl string `json:"profilePicUrl"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil && result.ProfilePicUrl != "" {
+		// Salva a foto do perfil no banco
+		_ = s.repo.UpdateChatMetadata(ctx, chatID, "", result.ProfilePicUrl)
+	}
 }

@@ -41,6 +41,7 @@ type Service interface {
 	SendConfirmationButtons(ctx context.Context, clientID, id string) error
 
 	SendWhatsAppNotification(ctx context.Context, slug, phone, message string) error
+	SendVerificationCodeOTP(ctx context.Context, slug, phone, code string) error
 
 	// FASE-05 / FASE-06 adicionais
 	Create(ctx context.Context, clientID, userID string, req CreateAppointmentRequest) (*EnrichedAppointment, error)
@@ -1057,4 +1058,19 @@ func (s *service) SendConfirmationButtons(ctx context.Context, clientID, id stri
 	footer := "Selecione uma das opções:"
 
 	return s.chatService.SendButtonsMessage(ctx, clientID, *app.CustomerPhone, title, text, footer)
+}
+
+func (s *service) SendVerificationCodeOTP(ctx context.Context, slug, phone, code string) error {
+	cfg, err := s.configRepo.GetBySlug(ctx, slug)
+	if err != nil {
+		return err
+	}
+
+	formattedCode := fmt.Sprintf("%s %s", code[:3], code[3:])
+	title := "Chave Descartável"
+	msg := fmt.Sprintf("Seu código de confirmação é: *%s*\n\nEle serve para validar o seu agendamento no BarberCentral e expira em 10 minutos.", formattedCode)
+	footer := "Não compartilhe este código."
+	buttonText := fmt.Sprintf("Código: %s", formattedCode)
+
+	return s.chatService.SendOTPButtonsMessage(ctx, cfg.ClientID, phone, title, msg, footer, buttonText)
 }

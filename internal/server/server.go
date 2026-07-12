@@ -186,6 +186,7 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 				r.Post("/appointments", appHandler.Create)
 				r.Put("/appointments/{id}", appHandler.Update)
 				r.Get("/appointments/{id}/logs", appHandler.GetStatusLogs)
+				r.Post("/appointments/{id}/confirm-buttons", appHandler.SendConfirmationButtons)
 				r.With(managerRoleLimit).Delete("/appointments/{id}", appHandler.Cancel)
 
 				r.With(managerRoleLimit).Post("/blocked-slots", appHandler.CreateBlockedSlot)

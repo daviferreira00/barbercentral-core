@@ -21,6 +21,7 @@ type Service interface {
 	SendMessage(ctx context.Context, clientID string, req SendMessageRequest) (*Message, error)
 	ProcessWebhook(ctx context.Context, payload WebhookPayload) error
 	SendButtonsMessage(ctx context.Context, clientID, number, title, text, footer string) error
+	SendOTPButtonsMessage(ctx context.Context, clientID, number, title, text, footer, buttonText string) error
 }
 
 type service struct {
@@ -397,4 +398,59 @@ func (s *service) fetchAndSaveProfilePic(instanceName string, number string, cha
 		// Salva a foto do perfil no banco
 		_ = s.repo.UpdateChatMetadata(ctx, chatID, "", result.ProfilePictureUrl)
 	}
+}
+
+func (s *service) SendOTPButtonsMessage(ctx context.Context, clientID, number, title, text, footer, buttonText string) error {
+	// 1. Achar o canal de WhatsApp ativo da barbearia
+	instances, err := s.waRepo.ListInstancesByClientID(ctx, clientID)
+	if err != nil {
+		return err
+	}
+
+	var activeInst *whatsapp.WhatsAppInstance
+	for i := range instances {
+		activeInst = &instances[i]
+		break // usamos a primeira cadastrada
+	}
+
+	if activeInst == nil {
+		return fmt.Errorf("barbearia não possui canal de WhatsApp cadastrado ou ativo")
+	}
+
+	// 2. Chamar Evolution API para enviar botões
+	evoURL, evoKey := getEvoCredentials()
+	payload := map[string]interface{}{
+		"number":      cleanNumber(number),
+		"title":       title,
+		"description": text,
+		"footer":      footer,
+		"buttons": []map[string]interface{}{
+			{
+				"id":          "otp_confirm",
+				"displayText": buttonText,
+			},
+		},
+	}
+
+	bodyBytes, _ := json.Marshal(payload)
+	postURL := fmt.Sprintf("%s/message/sendButtons/%s", evoURL, activeInst.InstanceName)
+	req, err := http.NewRequestWithContext(ctx, "POST", postURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("apikey", evoKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("falha ao enviar mensagem de botão OTP: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("Evolution API retornou status %d", resp.StatusCode)
+	}
+
+	return nil
 }

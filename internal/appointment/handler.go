@@ -445,11 +445,9 @@ func (h *AppointmentHandler) SendVerificationCode(w http.ResponseWriter, r *http
 
 	// Generate 6-digit code
 	code := fmt.Sprintf("%06d", rand.Intn(1000000))
-	formattedCode := fmt.Sprintf("%s %s", code[:3], code[3:])
 
-	// Send WhatsApp message
-	msg := fmt.Sprintf("*BarberCentral* — CHAVE DESCARTÁVEL\n\nSeu código de confirmação é: *%s*\n\nUse este código para confirmar o seu agendamento. Ele é válido por 10 minutos. Não o compartilhe com ninguém.", formattedCode)
-	err := h.service.SendWhatsAppNotification(r.Context(), slug, cleanPhone, msg)
+	// Send WhatsApp OTP Button message
+	err := h.service.SendVerificationCodeOTP(r.Context(), slug, cleanPhone, code)
 	if err != nil {
 		shared.RespondWithError(w, http.StatusInternalServerError, "Falha ao enviar código por WhatsApp: "+err.Error(), err)
 		return

@@ -73,12 +73,12 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 
 	finService := finance.NewService(finRepo, loyaltyService)
 	stockService := stock.NewService(stockRepo)
-	appService := appointment.NewService(appRepo, configRepo, profRepo, svcRepo, emailClient, custService, stockService, loyaltyService)
+	chatService := chat.NewService(chatRepo, waRepo)
+	appService := appointment.NewService(appRepo, configRepo, profRepo, svcRepo, emailClient, custService, stockService, loyaltyService, chatService)
 	admService := admin.NewAdminService(admRepo)
 	reportsService := reports.NewService(db)
 	waService := whatsapp.NewService(waRepo)
 	notifService := notification.NewService(notifRepo)
-	chatService := chat.NewService(chatRepo, waRepo)
 
 	// 3. Instanciar Handlers
 	authHandler := auth.NewAuthHandler(authService)
@@ -117,6 +117,8 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 		r.Get("/public/{slug}/professionals", configHandler.GetPublicProfessionals)
 		r.Get("/public/{slug}/availability", appHandler.GetAvailability)
 		r.Post("/public/{slug}/appointments", appHandler.CreatePublic)
+		r.Post("/public/{slug}/verification-code", appHandler.SendVerificationCode)
+		r.Post("/public/{slug}/verify-code", appHandler.VerifyCode)
 		r.Get("/public/appointments/cancel/{token}", appHandler.GetByCancelToken)
 		r.Post("/public/appointments/cancel/{token}", appHandler.CancelByToken)
 

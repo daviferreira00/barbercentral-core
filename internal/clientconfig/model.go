@@ -27,6 +27,7 @@ type ClientConfig struct {
 	BlockLunchEnabled        int     `json:"block_lunch_enabled" db:"block_lunch_enabled"`
 	BlockLunchStart          string  `json:"block_lunch_start" db:"block_lunch_start"`
 	BlockLunchEnd            string  `json:"block_lunch_end" db:"block_lunch_end"`
+	WhatsAppVerificationEnabled int  `json:"whatsapp_verification_enabled" db:"whatsapp_verification_enabled"`
 }
 
 type UpdateConfigRequest struct {
@@ -54,6 +55,7 @@ type UpdateConfigRequest struct {
 	BlockLunchEnabled       int     `json:"block_lunch_enabled"`
 	BlockLunchStart         string  `json:"block_lunch_start"`
 	BlockLunchEnd           string  `json:"block_lunch_end"`
+	WhatsAppVerificationEnabled int  `json:"whatsapp_verification_enabled"`
 }
 
 type PublicClientData struct {

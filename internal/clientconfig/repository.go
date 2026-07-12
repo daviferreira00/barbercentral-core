@@ -76,7 +76,8 @@ func (r *configRepository) Update(ctx context.Context, cfg *ClientConfig) error 
 			kds_pin = :kds_pin,
 			block_lunch_enabled = :block_lunch_enabled,
 			block_lunch_start = :block_lunch_start,
-			block_lunch_end = :block_lunch_end
+			block_lunch_end = :block_lunch_end,
+			whatsapp_verification_enabled = :whatsapp_verification_enabled
 			WHERE client_id = :client_id`
 		_, err = r.db.NamedExecContext(ctx, query, cfg)
 		return err
@@ -87,12 +88,12 @@ func (r *configRepository) Update(ctx context.Context, cfg *ClientConfig) error 
 		client_id, logo_url, logo_central, color_primary, color_secondary, color_button, background_type, font_family, address, neighborhood, city, state,
 		phone, whatsapp, instagram, timezone, cancellation_policy_hours, booking_requires_login,
 		min_advance_hours, max_advance_days, interval_between_minutes, active, kds_pin,
-		block_lunch_enabled, block_lunch_start, block_lunch_end
+		block_lunch_enabled, block_lunch_start, block_lunch_end, whatsapp_verification_enabled
 	) VALUES (
 		:client_id, :logo_url, :logo_central, :color_primary, :color_secondary, :color_button, :background_type, :font_family, :address, :neighborhood, :city, :state,
 		:phone, :whatsapp, :instagram, :timezone, :cancellation_policy_hours, :booking_requires_login,
 		:min_advance_hours, :max_advance_days, :interval_between_minutes, 1, :kds_pin,
-		:block_lunch_enabled, :block_lunch_start, :block_lunch_end
+		:block_lunch_enabled, :block_lunch_start, :block_lunch_end, :whatsapp_verification_enabled
 	)`
 	_, err = r.db.NamedExecContext(ctx, queryInsert, cfg)
 	return err

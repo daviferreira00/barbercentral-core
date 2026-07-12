@@ -17,6 +17,7 @@ import (
 	"barbercentral-core/internal/professional"
 	svc "barbercentral-core/internal/service"
 	"barbercentral-core/internal/stock"
+	"barbercentral-core/internal/chat"
 )
 
 var (
@@ -38,6 +39,8 @@ type Service interface {
 	CancelByToken(ctx context.Context, token string) error
 	SendUpcomingReminders(ctx context.Context) (int, error)
 
+	SendWhatsAppNotification(ctx context.Context, slug, phone, message string) error
+
 	// FASE-05 / FASE-06 adicionais
 	Create(ctx context.Context, clientID, userID string, req CreateAppointmentRequest) (*EnrichedAppointment, error)
 	Update(ctx context.Context, clientID, id, userID string, req UpdateAppointmentRequest) (*EnrichedAppointment, error)
@@ -52,9 +55,10 @@ type service struct {
 	profRepo    professional.ProfessionalRepository
 	svcRepo     svc.ServiceRepository
 	emailClient *email.Client
-	custService customer.Service
-	stockService stock.Service
+	custService    customer.Service
+	stockService   stock.Service
 	loyaltyService loyalty.Service
+	chatService    chat.Service
 }
 
 func NewService(
@@ -66,6 +70,7 @@ func NewService(
 	custService customer.Service,
 	stockService stock.Service,
 	loyaltyService loyalty.Service,
+	chatService chat.Service,
 ) Service {
 	return &service{
 		repo:           repo,
@@ -76,7 +81,20 @@ func NewService(
 		custService:    custService,
 		stockService:   stockService,
 		loyaltyService: loyaltyService,
+		chatService:    chatService,
 	}
+}
+
+func (s *service) SendWhatsAppNotification(ctx context.Context, slug, phone, message string) error {
+	cfg, err := s.configRepo.GetBySlug(ctx, slug)
+	if err != nil {
+		return err
+	}
+	_, err = s.chatService.SendMessage(ctx, cfg.ClientID, chat.SendMessageRequest{
+		ContactNumber: phone,
+		Content:       message,
+	})
+	return err
 }
 
 func (s *service) ListBlockedSlots(ctx context.Context, clientID, professionalID, startDate, endDate string) ([]BlockedSlot, error) {
@@ -143,6 +161,33 @@ func (s *service) UpdateStatus(ctx context.Context, clientID, id, status, userID
 		CreatedAt:     time.Now(),
 	}
 	_ = s.repo.CreateStatusLog(ctx, statusLog)
+
+	// Notifica cliente se confirmado pelo barbeiro
+	if status == "confirmed" && app.CustomerPhone != nil && *app.CustomerPhone != "" {
+		dateFormatted := ""
+		tDate, err := time.Parse("2006-01-02", app.Date)
+		if err == nil {
+			dateFormatted = tDate.Format("02/01/2006")
+		} else {
+			dateFormatted = app.Date
+		}
+		timeFormatted := app.StartTime[:5]
+		servicesStr := ""
+		for i, srv := range app.Services {
+			if i > 0 {
+				servicesStr += ", "
+			}
+			servicesStr += srv.ServiceName
+		}
+		
+		msg := fmt.Sprintf("Olá, %s! Seu agendamento para o dia %s às %s foi confirmado pelo barbeiro.\n\nProfissional: %s\nServiços: %s",
+			*app.CustomerName, dateFormatted, timeFormatted, app.ProfessionalName, servicesStr)
+			
+		_, _ = s.chatService.SendMessage(ctx, clientID, chat.SendMessageRequest{
+			ContactNumber: *app.CustomerPhone,
+			Content:       msg,
+		})
+	}
 
 	// Notifica cliente se cancelado
 	if status == "cancelled" && s.emailClient != nil && app.CustomerEmail != nil && *app.CustomerEmail != "" {
@@ -529,6 +574,33 @@ func (s *service) CreatePublic(ctx context.Context, slug string, req CreatePubli
 			cfg.CancellationPolicyHours, cancelToken)
 
 		_ = s.emailClient.Send(req.CustomerEmail, subject, body)
+	}
+
+	// Envia WhatsApp automático de criação/recebimento
+	if enriched.CustomerPhone != nil && *enriched.CustomerPhone != "" {
+		dateFormatted := ""
+		tDate, err := time.Parse("2006-01-02", enriched.Date)
+		if err == nil {
+			dateFormatted = tDate.Format("02/01/2006")
+		} else {
+			dateFormatted = enriched.Date
+		}
+		timeFormatted := enriched.StartTime[:5]
+		servicesStr := ""
+		for i, srv := range enriched.Services {
+			if i > 0 {
+				servicesStr += ", "
+			}
+			servicesStr += srv.ServiceName
+		}
+		
+		msg := fmt.Sprintf("Olá, %s! Seu agendamento para o dia %s às %s foi realizado com sucesso.\n\nProfissional: %s\nServiços: %s",
+			*enriched.CustomerName, dateFormatted, timeFormatted, enriched.ProfessionalName, servicesStr)
+			
+		_, _ = s.chatService.SendMessage(ctx, cfg.ClientID, chat.SendMessageRequest{
+			ContactNumber: *enriched.CustomerPhone,
+			Content:       msg,
+		})
 	}
 
 	return enriched, nil

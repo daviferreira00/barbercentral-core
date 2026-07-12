@@ -3,8 +3,12 @@ package appointment
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -12,11 +16,17 @@ import (
 )
 
 type AppointmentHandler struct {
-	service Service
+	service           Service
+	verificationCodes *verificationStore
 }
 
 func NewAppointmentHandler(service Service) *AppointmentHandler {
-	return &AppointmentHandler{service: service}
+	return &AppointmentHandler{
+		service: service,
+		verificationCodes: &verificationStore{
+			codes: make(map[string]verificationCode),
+		},
+	}
 }
 
 func (h *AppointmentHandler) ListBlockedSlots(w http.ResponseWriter, r *http.Request) {
@@ -359,3 +369,118 @@ func (h *AppointmentHandler) GetAvailabilityInternal(w http.ResponseWriter, r *h
 
 	shared.RespondWithJSON(w, http.StatusOK, slots)
 }
+
+// Suporte para código de verificação temporário por WhatsApp
+type verificationCode struct {
+	Code      string
+	ExpiresAt time.Time
+}
+
+type verificationStore struct {
+	mu    sync.RWMutex
+	codes map[string]verificationCode
+}
+
+func (v *verificationStore) Set(phone, code string) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.codes[phone] = verificationCode{
+		Code:      code,
+		ExpiresAt: time.Now().Add(10 * time.Minute),
+	}
+}
+
+func (v *verificationStore) Verify(phone, code string) bool {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	vc, exists := v.codes[phone]
+	if !exists {
+		return false
+	}
+
+	if time.Now().After(vc.ExpiresAt) {
+		delete(v.codes, phone)
+		return false
+	}
+
+	if vc.Code == code {
+		delete(v.codes, phone)
+		return true
+	}
+
+	return false
+}
+
+func cleanNumber(phone string) string {
+	var clean []rune
+	for _, r := range phone {
+		if r >= '0' && r <= '9' {
+			clean = append(clean, r)
+		}
+	}
+	s := string(clean)
+	if len(s) == 10 || len(s) == 11 {
+		s = "55" + s
+	}
+	return s
+}
+
+func (h *AppointmentHandler) SendVerificationCode(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+
+	var req struct {
+		Phone string `json:"phone"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido", err)
+		return
+	}
+
+	cleanPhone := cleanNumber(req.Phone)
+	if cleanPhone == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Telefone inválido", nil)
+		return
+	}
+
+	// Generate 6-digit code
+	code := fmt.Sprintf("%06d", rand.Intn(1000000))
+
+	// Send WhatsApp message
+	msg := fmt.Sprintf("Seu código de confirmação para o agendamento no BarberCentral é: %s", code)
+	err := h.service.SendWhatsAppNotification(r.Context(), slug, cleanPhone, msg)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Falha ao enviar código por WhatsApp: "+err.Error(), err)
+		return
+	}
+
+	h.verificationCodes.Set(cleanPhone, code)
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (h *AppointmentHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Phone string `json:"phone"`
+		Code  string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido", err)
+		return
+	}
+
+	cleanPhone := cleanNumber(req.Phone)
+	if cleanPhone == "" || req.Code == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Telefone e código são obrigatórios", nil)
+		return
+	}
+
+	valid := h.verificationCodes.Verify(cleanPhone, req.Code)
+	if !valid {
+		shared.RespondWithError(w, http.StatusUnauthorized, "Código inválido ou expirado", nil)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"verified": true})
+}
+

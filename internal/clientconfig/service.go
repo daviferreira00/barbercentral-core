@@ -57,6 +57,7 @@ func (s *configService) Update(ctx context.Context, clientID string, req UpdateC
 		BlockLunchEnabled:        req.BlockLunchEnabled,
 		BlockLunchStart:          req.BlockLunchStart,
 		BlockLunchEnd:            req.BlockLunchEnd,
+		WhatsAppVerificationEnabled: req.WhatsAppVerificationEnabled,
 	}
 
 	if cfg.ColorPrimary == "" {

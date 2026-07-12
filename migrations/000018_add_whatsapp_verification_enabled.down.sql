@@ -1,0 +1,1 @@
+ALTER TABLE client_config DROP COLUMN whatsapp_verification_enabled;

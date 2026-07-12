@@ -213,7 +213,7 @@ func (s *service) ProcessWebhook(ctx context.Context, payload WebhookPayload) er
 	}
 
 	contactName := payload.Data.PushName
-	if contactName == "" {
+	if payload.Data.Key.FromMe || contactName == "" {
 		contactName = contactNumber
 	}
 
@@ -222,8 +222,8 @@ func (s *service) ProcessWebhook(ctx context.Context, payload WebhookPayload) er
 		return err
 	}
 
-	// Atualiza o pushName da conversa se recebermos um pushName válido no webhook
-	if payload.Data.PushName != "" {
+	// Atualiza o pushName da conversa se recebermos um pushName válido no webhook e NÃO for uma mensagem enviada por nós (FromMe)
+	if !payload.Data.Key.FromMe && payload.Data.PushName != "" {
 		_ = s.repo.UpdateChatMetadata(ctx, chat.ID, payload.Data.PushName, "")
 	}
 
@@ -367,7 +367,7 @@ func (s *service) fetchAndSaveProfilePic(instanceName string, number string, cha
 	defer cancel()
 
 	evoURL, evoKey := getEvoCredentials()
-	postURL := fmt.Sprintf("%s/chat/fetchProfilePicture/%s", evoURL, instanceName)
+	postURL := fmt.Sprintf("%s/chat/fetchProfilePictureUrl/%s", evoURL, instanceName)
 	payload := map[string]string{
 		"number": cleanNumber(number),
 	}
@@ -391,10 +391,10 @@ func (s *service) fetchAndSaveProfilePic(instanceName string, number string, cha
 	}
 
 	var result struct {
-		ProfilePicUrl string `json:"profilePicUrl"`
+		ProfilePictureUrl string `json:"profilePictureUrl"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil && result.ProfilePicUrl != "" {
+	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil && result.ProfilePictureUrl != "" {
 		// Salva a foto do perfil no banco
-		_ = s.repo.UpdateChatMetadata(ctx, chatID, "", result.ProfilePicUrl)
+		_ = s.repo.UpdateChatMetadata(ctx, chatID, "", result.ProfilePictureUrl)
 	}
 }

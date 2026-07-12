@@ -43,10 +43,12 @@ func (r *repository) ListChats(ctx context.Context, clientID string) ([]Chat, er
 			cust.name as customer_name
 		FROM whatsapp_chat c
 		LEFT JOIN customer cust ON cust.client_id = c.client_id AND (
-			cust.phone = c.contact_number OR
-			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = c.contact_number OR
-			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = SUBSTRING(c.contact_number, 3) OR
-			CONCAT('55', REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '')) = c.contact_number
+			(
+				RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', ''), 8) = RIGHT(c.contact_number, 8) AND
+				LEFT(RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', ''), 10), 2) = LEFT(RIGHT(c.contact_number, 10), 2)
+			)
+			OR
+			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = c.contact_number
 		)
 		WHERE c.client_id = ?
 		ORDER BY c.updated_at DESC
@@ -64,10 +66,12 @@ func (r *repository) GetChatByID(ctx context.Context, clientID, chatID string) (
 			cust.name as customer_name
 		FROM whatsapp_chat c
 		LEFT JOIN customer cust ON cust.client_id = c.client_id AND (
-			cust.phone = c.contact_number OR
-			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = c.contact_number OR
-			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = SUBSTRING(c.contact_number, 3) OR
-			CONCAT('55', REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '')) = c.contact_number
+			(
+				RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', ''), 8) = RIGHT(c.contact_number, 8) AND
+				LEFT(RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', ''), 10), 2) = LEFT(RIGHT(c.contact_number, 10), 2)
+			)
+			OR
+			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = c.contact_number
 		)
 		WHERE c.client_id = ? AND c.id = ?
 	`
@@ -90,10 +94,12 @@ func (r *repository) GetOrCreateChat(ctx context.Context, clientID, contactNumbe
 			cust.name as customer_name
 		FROM whatsapp_chat c
 		LEFT JOIN customer cust ON cust.client_id = c.client_id AND (
-			cust.phone = c.contact_number OR
-			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = c.contact_number OR
-			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = SUBSTRING(c.contact_number, 3) OR
-			CONCAT('55', REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '')) = c.contact_number
+			(
+				RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', ''), 8) = RIGHT(c.contact_number, 8) AND
+				LEFT(RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', ''), 10), 2) = LEFT(RIGHT(c.contact_number, 10), 2)
+			)
+			OR
+			REPLACE(REPLACE(REPLACE(REPLACE(cust.phone, '-', ''), ' ', ''), '(', ''), ')', '') = c.contact_number
 		)
 		WHERE c.client_id = ? AND c.contact_number = ?
 	`

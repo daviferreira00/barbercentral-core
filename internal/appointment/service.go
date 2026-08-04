@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"barbercentral-core/internal/chat"
 	"barbercentral-core/internal/clientconfig"
 	"barbercentral-core/internal/customer"
 	"barbercentral-core/internal/email"
@@ -17,7 +18,6 @@ import (
 	"barbercentral-core/internal/professional"
 	svc "barbercentral-core/internal/service"
 	"barbercentral-core/internal/stock"
-	"barbercentral-core/internal/chat"
 )
 
 var (
@@ -52,11 +52,11 @@ type Service interface {
 }
 
 type service struct {
-	repo        AppointmentRepository
-	configRepo  clientconfig.ConfigRepository
-	profRepo    professional.ProfessionalRepository
-	svcRepo     svc.ServiceRepository
-	emailClient *email.Client
+	repo           AppointmentRepository
+	configRepo     clientconfig.ConfigRepository
+	profRepo       professional.ProfessionalRepository
+	svcRepo        svc.ServiceRepository
+	emailClient    *email.Client
 	custService    customer.Service
 	stockService   stock.Service
 	loyaltyService loyalty.Service
@@ -159,8 +159,13 @@ func (s *service) UpdateStatus(ctx context.Context, clientID, id, status, userID
 		FromStatus:    &oldStatus,
 		ToStatus:      status,
 		ChangedBy:     userID,
-		Notes:         func() *string { if notes != "" { return &notes }; return nil }(),
-		CreatedAt:     time.Now(),
+		Notes: func() *string {
+			if notes != "" {
+				return &notes
+			}
+			return nil
+		}(),
+		CreatedAt: time.Now(),
 	}
 	_ = s.repo.CreateStatusLog(ctx, statusLog)
 
@@ -185,10 +190,10 @@ func (s *service) UpdateStatus(ctx context.Context, clientID, id, status, userID
 			}
 			servicesStr += srv.ServiceName
 		}
-		
+
 		msg := fmt.Sprintf("Olá, %s! Seu agendamento para o dia %s às %s foi confirmado pelo barbeiro.\n\nProfissional: %s\nServiços: %s",
 			*app.CustomerName, dateFormatted, timeFormatted, app.ProfessionalName, servicesStr)
-			
+
 		_, _ = s.chatService.SendMessage(ctx, clientID, chat.SendMessageRequest{
 			ContactNumber: *app.CustomerPhone,
 			Content:       msg,
@@ -318,7 +323,7 @@ func (s *service) GetAvailability(ctx context.Context, slug string, professional
 		endT, _ := time.Parse("15:04:05", sched.EndTime)
 
 		currT := startT
-		for currT.Add(time.Duration(totalDuration) * time.Minute).Before(endT) || currT.Add(time.Duration(totalDuration)*time.Minute).Equal(endT) {
+		for currT.Add(time.Duration(totalDuration)*time.Minute).Before(endT) || currT.Add(time.Duration(totalDuration)*time.Minute).Equal(endT) {
 			slotEnd := currT.Add(time.Duration(totalDuration) * time.Minute)
 
 			collision := false
@@ -603,10 +608,10 @@ func (s *service) CreatePublic(ctx context.Context, slug string, req CreatePubli
 			}
 			servicesStr += srv.ServiceName
 		}
-		
+
 		msg := fmt.Sprintf("Olá, %s! Seu agendamento para o dia %s às %s foi realizado com sucesso.\n\nProfissional: %s\nServiços: %s",
 			*enriched.CustomerName, dateFormatted, timeFormatted, enriched.ProfessionalName, servicesStr)
-			
+
 		_, _ = s.chatService.SendMessage(ctx, cfg.ClientID, chat.SendMessageRequest{
 			ContactNumber: *enriched.CustomerPhone,
 			Content:       msg,
@@ -910,9 +915,48 @@ func (s *service) Update(ctx context.Context, clientID, id, userID string, req U
 		return nil, err
 	}
 
+	serviceIDs := req.ServiceIDs
+	if len(serviceIDs) == 0 {
+		for _, appService := range app.Services {
+			serviceIDs = append(serviceIDs, appService.ServiceID)
+		}
+	}
+
 	totalDuration := 0
-	for _, sSvc := range app.Services {
-		totalDuration += sSvc.Duration
+	var appServices []AppointmentService
+	for _, serviceID := range serviceIDs {
+		serviceDuration := 0
+		servicePrice := 0.0
+		linked, linkedErr := s.profRepo.GetLinkedServices(ctx, clientID, req.ProfessionalID)
+		if linkedErr == nil {
+			for _, link := range linked {
+				if link.ServiceID == serviceID {
+					if link.CustomDuration != nil {
+						serviceDuration = *link.CustomDuration
+					}
+					if link.CustomPrice != nil {
+						servicePrice = *link.CustomPrice
+					}
+				}
+			}
+		}
+		if serviceDuration == 0 || servicePrice == 0 {
+			original, serviceErr := s.svcRepo.GetByID(ctx, clientID, serviceID)
+			if serviceErr != nil {
+				return nil, fmt.Errorf("serviço com ID %s não encontrado", serviceID)
+			}
+			if serviceDuration == 0 {
+				serviceDuration = original.DurationMinutes
+			}
+			if servicePrice == 0 {
+				servicePrice = original.Price
+			}
+		}
+		totalDuration += serviceDuration
+		appServices = append(appServices, AppointmentService{
+			ID: uuid.New().String(), AppointmentID: app.ID, ServiceID: serviceID,
+			Price: servicePrice, DurationMinutes: serviceDuration,
+		})
 	}
 
 	startTimeParsed, err := time.Parse("15:04", req.StartTime)
@@ -974,24 +1018,13 @@ func (s *service) Update(ctx context.Context, clientID, id, userID string, req U
 	app.StartTime = startTimeStr
 	app.EndTime = endTimeStr
 
-	var appServices []AppointmentService
-	for _, sSvc := range app.Services {
-		appServices = append(appServices, AppointmentService{
-			ID:              uuid.New().String(),
-			AppointmentID:   app.ID,
-			ServiceID:       sSvc.ServiceID,
-			Price:           sSvc.Price,
-			DurationMinutes: sSvc.Duration,
-		})
-	}
-
 	err = s.repo.Update(ctx, &app.Appointment, appServices)
 	if err != nil {
 		return nil, err
 	}
 
 	// Log
-	logNotes := fmt.Sprintf("Reagendado: de %s %s para %s %s", oldDate, oldTime[:5], req.Date, req.StartTime[:5])
+	logNotes := fmt.Sprintf("Agendamento editado: de %s %s para %s %s; serviços atualizados", oldDate, oldTime[:5], req.Date, req.StartTime[:5])
 	statusLog := &AppointmentStatusLog{
 		ID:            uuid.New().String(),
 		AppointmentID: app.ID,

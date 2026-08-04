@@ -125,9 +125,8 @@ type CreateAppointmentRequest struct {
 }
 
 type UpdateAppointmentRequest struct {
-	ProfessionalID string `json:"professional_id"`
-	Date           string `json:"date"`
-	StartTime      string `json:"start_time"`
+	ProfessionalID string   `json:"professional_id"`
+	ServiceIDs     []string `json:"service_ids"`
+	Date           string   `json:"date"`
+	StartTime      string   `json:"start_time"`
 }
-
-

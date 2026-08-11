@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS client_config (
   cancellation_policy_hours INT NOT NULL DEFAULT 2,
   booking_requires_login    TINYINT(1) NOT NULL DEFAULT 0,
   min_advance_hours         INT NOT NULL DEFAULT 1,
-  max_advance_days          INT NOT NULL DEFAULT 30,
+  max_advance_days          INT NOT NULL DEFAULT 60,
   interval_between_minutes  INT NOT NULL DEFAULT 0,
   active                    TINYINT(1) NOT NULL DEFAULT 1,
   FOREIGN KEY (client_id) REFERENCES client(id) ON DELETE CASCADE

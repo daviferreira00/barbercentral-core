@@ -84,9 +84,9 @@ INSERT INTO client_user (id, client_id, name, email, password_hash, role, status
 -- 5. CLIENT CONFIG (Identidade Visual e Configurações)
 -- ============================================
 INSERT INTO client_config (client_id, logo_url, color_primary, color_secondary, font_family, address, neighborhood, city, state, phone, whatsapp, instagram, timezone, cancellation_policy_hours, booking_requires_login, min_advance_hours, max_advance_days, interval_between_minutes, active) VALUES
-('cli-barber-modelo', NULL, '#0f172a', '#d97706', 'Inter', 'Rua das Palmeiras, 150', 'Centro', 'São Paulo', 'SP', '11999999999', '11999999999', 'barbeariamodelo', 'America/Sao_Paulo', 2, 0, 1, 30, 15, 1),
-('cli-corte-fino',    NULL, '#1e293b', '#ef4444', 'Poppins', 'Av. Brasil, 2000', 'Jardins', 'São Paulo', 'SP', '11988887777', '11988887777', 'cortefino', 'America/Sao_Paulo', 4, 0, 2, 14, 10, 1),
-('cli-teste-basico',  NULL, '#111827', '#10b981', 'Roboto', 'Rua XV de Novembro, 45', 'Centro', 'Curitiba', 'PR', '41977776666', '41977776666', 'barbarapida', 'America/Sao_Paulo', 1, 0, 1, 7, 0, 1);
+('cli-barber-modelo', NULL, '#0f172a', '#d97706', 'Inter', 'Rua das Palmeiras, 150', 'Centro', 'São Paulo', 'SP', '11999999999', '11999999999', 'barbeariamodelo', 'America/Sao_Paulo', 2, 0, 1, 60, 15, 1),
+('cli-corte-fino',    NULL, '#1e293b', '#ef4444', 'Poppins', 'Av. Brasil, 2000', 'Jardins', 'São Paulo', 'SP', '11988887777', '11988887777', 'cortefino', 'America/Sao_Paulo', 4, 0, 2, 60, 10, 1),
+('cli-teste-basico',  NULL, '#111827', '#10b981', 'Roboto', 'Rua XV de Novembro, 45', 'Centro', 'Curitiba', 'PR', '41977776666', '41977776666', 'barbarapida', 'America/Sao_Paulo', 1, 0, 1, 60, 0, 1);
 
 -- ============================================
 -- 6. PROFISSIONAIS

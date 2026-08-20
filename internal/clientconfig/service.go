@@ -113,6 +113,13 @@ func (s *configService) GetBrandingByClientID(ctx context.Context, clientID stri
 		}
 	}
 
+	if cfg.ColorPrimary == "" {
+		cfg.ColorPrimary = "#1a1a1a"
+	}
+	if cfg.ColorSecondary == "" {
+		cfg.ColorSecondary = "#c9a84c"
+	}
+
 	name, err := s.repo.GetClientName(ctx, clientID)
 	if err != nil {
 		return nil, err

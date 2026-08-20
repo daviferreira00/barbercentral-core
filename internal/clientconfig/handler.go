@@ -56,6 +56,13 @@ func (h *ConfigHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if cfg.ColorPrimary == "" {
+		cfg.ColorPrimary = "#1a1a1a"
+	}
+	if cfg.ColorSecondary == "" {
+		cfg.ColorSecondary = "#c9a84c"
+	}
+
 	shared.RespondWithJSON(w, http.StatusOK, cfg)
 }
 

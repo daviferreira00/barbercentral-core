@@ -267,25 +267,30 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 				// Módulo de Planos e Indicadores de Uso do Cliente
 				r.With(ownerRoleLimit).Get("/plan/usage", limitHandler.GetUsage)
 
-				// Módulo de Canais de Envio WhatsApp (Tenant)
-				r.Get("/cliente/whatsapp", waHandler.ListClient)
-				r.Post("/cliente/whatsapp", waHandler.CreateClient)
-				r.Get("/cliente/whatsapp/connect/{name}", waHandler.ConnectClient)
-				r.Get("/cliente/whatsapp/state/{name}", waHandler.StateClient)
-				r.Delete("/cliente/whatsapp/logout/{name}", waHandler.LogoutClient)
-				r.Delete("/cliente/whatsapp/{name}", waHandler.DeleteClient)
+				// Módulo de Automações e Canais WhatsApp (Requer Plano Pro / feature WhatsApp)
+				r.Group(func(r chi.Router) {
+					r.Use(planlimit.RequireFeatureWhatsApp(db))
 
-				// Módulo de Configuração de Notificações (Tenant)
-				r.Get("/cliente/notificacoes", notifHandler.List)
-				r.Post("/cliente/notificacoes", notifHandler.Create)
-				r.Get("/cliente/notificacoes/{id}", notifHandler.GetByID)
-				r.Put("/cliente/notificacoes/{id}", notifHandler.Update)
-				r.Delete("/cliente/notificacoes/{id}", notifHandler.Delete)
+					// Módulo de Canais de Envio WhatsApp (Tenant)
+					r.Get("/cliente/whatsapp", waHandler.ListClient)
+					r.Post("/cliente/whatsapp", waHandler.CreateClient)
+					r.Get("/cliente/whatsapp/connect/{name}", waHandler.ConnectClient)
+					r.Get("/cliente/whatsapp/state/{name}", waHandler.StateClient)
+					r.Delete("/cliente/whatsapp/logout/{name}", waHandler.LogoutClient)
+					r.Delete("/cliente/whatsapp/{name}", waHandler.DeleteClient)
 
-				// Módulo de Chat B2C (Tenant)
-				r.Get("/cliente/chats", chatHandler.List)
-				r.Get("/cliente/chats/{id}/messages", chatHandler.ListMessages)
-				r.Post("/cliente/chats/send", chatHandler.SendMessage)
+					// Módulo de Configuração de Notificações (Tenant)
+					r.Get("/cliente/notificacoes", notifHandler.List)
+					r.Post("/cliente/notificacoes", notifHandler.Create)
+					r.Get("/cliente/notificacoes/{id}", notifHandler.GetByID)
+					r.Put("/cliente/notificacoes/{id}", notifHandler.Update)
+					r.Delete("/cliente/notificacoes/{id}", notifHandler.Delete)
+
+					// Módulo de Chat B2C (Tenant)
+					r.Get("/cliente/chats", chatHandler.List)
+					r.Get("/cliente/chats/{id}/messages", chatHandler.ListMessages)
+					r.Post("/cliente/chats/send", chatHandler.SendMessage)
+				})
 
 				// Fallback route para compatibilidade
 				r.Post("/cliente/appointments/{id}/confirm-buttons", appHandler.SendConfirmationButtons)

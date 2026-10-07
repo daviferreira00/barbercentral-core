@@ -274,8 +274,8 @@ func (r *adminRepository) ListPlans(ctx context.Context) ([]planlimit.Plan, erro
 }
 
 func (r *adminRepository) CreatePlan(ctx context.Context, p *planlimit.Plan) error {
-	query := `INSERT INTO plan (id, name, max_professionals, max_customers, max_users, has_loyalty, has_stock, has_reports, has_online_booking, is_public, price, created_at)
-	          VALUES (:id, :name, :max_professionals, :max_customers, :max_users, :has_loyalty, :has_stock, :has_reports, :has_online_booking, :is_public, :price, NOW())`
+	query := `INSERT INTO plan (id, name, max_professionals, max_customers, max_users, has_loyalty, has_stock, has_reports, has_online_booking, has_whatsapp, is_public, price, created_at)
+	          VALUES (:id, :name, :max_professionals, :max_customers, :max_users, :has_loyalty, :has_stock, :has_reports, :has_online_booking, :has_whatsapp, :is_public, :price, NOW())`
 	_, err := r.db.NamedExecContext(ctx, query, p)
 	return err
 }
@@ -284,7 +284,7 @@ func (r *adminRepository) UpdatePlan(ctx context.Context, p *planlimit.Plan) err
 	query := `UPDATE plan
 	          SET name = :name, max_professionals = :max_professionals, max_customers = :max_customers, max_users = :max_users,
 	              has_loyalty = :has_loyalty, has_stock = :has_stock, has_reports = :has_reports,
-	              has_online_booking = :has_online_booking, is_public = :is_public, price = :price
+	              has_online_booking = :has_online_booking, has_whatsapp = :has_whatsapp, is_public = :is_public, price = :price
 	          WHERE id = :id`
 	_, err := r.db.NamedExecContext(ctx, query, p)
 	return err

@@ -20,6 +20,7 @@ type Plan struct {
 	HasStock         int     `db:"has_stock" json:"has_stock"`
 	HasReports       int     `db:"has_reports" json:"has_reports"`
 	HasOnlineBooking int     `db:"has_online_booking" json:"has_online_booking"`
+	HasWhatsApp      int     `db:"has_whatsapp" json:"has_whatsapp"`
 	IsPublic         int     `db:"is_public" json:"is_public"`
 	BillingType      string  `db:"billing_type" json:"billing_type"`
 	Price            float64 `db:"price" json:"price"`
@@ -183,6 +184,26 @@ func RequireFeatureReports(db *sqlx.DB) func(http.Handler) http.Handler {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusForbidden)
 				_, _ = w.Write([]byte(`{"error":"plan_feature_not_included","feature":"has_reports"}`))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func RequireFeatureWhatsApp(db *sqlx.DB) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			clientID, _ := r.Context().Value("client_id").(string)
+			if clientID == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			p, err := GetClientPlan(r.Context(), db, clientID)
+			if err != nil || p.HasWhatsApp == 0 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(`{"error":"plan_feature_not_included","feature":"has_whatsapp"}`))
 				return
 			}
 			next.ServeHTTP(w, r)

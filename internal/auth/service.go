@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -43,6 +45,12 @@ type AuthService interface {
 	ReturnToAdmin(ctx context.Context, originalAdminID string) (string, error)
 	ChangePassword(ctx context.Context, userID, userRole, currentPassword, newPassword string) error
 	UpdateProfile(ctx context.Context, userID, userRole, name, email, newPassword string, photoURL *string) (string, error)
+
+	// Trial & Onboarding
+	RegisterTrial(ctx context.Context, req RegisterTrialRequest) (*LoginResponse, error)
+	GetOnboardingStatus(ctx context.Context, userID, clientID string) (*OnboardingStatusResponse, error)
+	FinishWizard(ctx context.Context, userID, clientID string, req WizardOnboardingRequest) error
+	MarkTutorialSeen(ctx context.Context, userID, clientID, tutorialID string) ([]string, error)
 }
 
 type authService struct {
@@ -202,7 +210,7 @@ func (s *authService) GetProfile(ctx context.Context, userID, role, clientID, or
 	if err != nil {
 		return nil, err
 	}
-	return &ProfileResponse{User: &Usuario{
+	u := &Usuario{
 		ID:                   acc.ID,
 		ClientID:             clientID,
 		Nome:                 acc.Name,
@@ -210,7 +218,18 @@ func (s *authService) GetProfile(ctx context.Context, userID, role, clientID, or
 		Role:                 role,
 		NeedsClientSelection: clientID == "" && role == "",
 		PhotoURL:             acc.PhotoURL,
-	}}, nil
+	}
+
+	if clientID != "" {
+		completed, _, status, trialEnds, err := s.repo.GetOnboardingData(ctx, userID, clientID)
+		if err == nil {
+			u.CompletedOnboarding = completed
+			u.SubscriptionStatus = status
+			u.TrialEndsAt = trialEnds
+		}
+	}
+
+	return &ProfileResponse{User: u}, nil
 }
 
 func (s *authService) ForgotPassword(ctx context.Context, emailVal, host string) (string, error) {
@@ -652,5 +671,160 @@ func (s *authService) UpdateProfile(ctx context.Context, userID, userRole, name,
 
 	return s.generateJWT(user, "")
 }
+
+func makeSlug(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else if r == ' ' || r == '-' || r == '_' {
+			b.WriteRune('-')
+		}
+	}
+	res := strings.Trim(b.String(), "-")
+	if res == "" {
+		res = fmt.Sprintf("barbearia-%d", time.Now().Unix()%10000)
+	}
+	return res
+}
+
+func (s *authService) RegisterTrial(ctx context.Context, req RegisterTrialRequest) (*LoginResponse, error) {
+	req.BarberName = strings.TrimSpace(req.BarberName)
+	req.Name = strings.TrimSpace(req.Name)
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	req.Phone = strings.TrimSpace(req.Phone)
+
+	if req.BarberName == "" || req.Name == "" || req.Email == "" || req.Password == "" {
+		return nil, errors.New("preencha todos os campos obrigatórios")
+	}
+
+	_, err := s.repo.GetUserAccountByEmail(ctx, req.Email)
+	if err == nil {
+		return nil, errors.New("este e-mail já está cadastrado no sistema")
+	}
+	_, err = s.repo.GetAdminByEmail(ctx, req.Email)
+	if err == nil {
+		return nil, errors.New("este e-mail já está cadastrado no sistema")
+	}
+
+	clientID := uuid.New().String()
+	userID := uuid.New().String()
+	linkID := uuid.New().String()
+
+	slugBase := makeSlug(req.BarberName)
+	slug := slugBase + "-" + uuid.New().String()[:6]
+
+	hashBytes, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, errors.New("erro ao criptografar a senha")
+	}
+
+	trialEnds := time.Now().AddDate(0, 0, 7)
+
+	planID, _ := s.repo.GetDefaultTrialPlanID(ctx)
+
+	if err := s.repo.RegisterTrialClient(ctx, clientID, planID, req.BarberName, slug, req.Phone, trialEnds); err != nil {
+		return nil, fmt.Errorf("erro ao registrar barbearia: %w", err)
+	}
+
+	if err := s.repo.CreateUserAccount(ctx, userID, req.Name, req.Email, string(hashBytes)); err != nil {
+		return nil, fmt.Errorf("erro ao criar usuário: %w", err)
+	}
+
+	if err := s.repo.CreateClientUserLink(ctx, linkID, userID, clientID, "owner", "active"); err != nil {
+		return nil, fmt.Errorf("erro ao vincular usuário à barbearia: %w", err)
+	}
+
+	if err := s.repo.CreateDefaultClientConfig(ctx, clientID, req.Phone); err != nil {
+		log.Warn().Err(err).Msg("Aviso ao criar config padrão do cliente")
+	}
+
+	u := &Usuario{
+		ID:                  userID,
+		ClientID:            clientID,
+		Nome:                req.Name,
+		Email:               req.Email,
+		Role:                "owner",
+		CompletedOnboarding: false,
+		SubscriptionStatus:  "trial",
+		TrialEndsAt:         &trialEnds,
+	}
+
+	tokenStr, err := s.generateJWT(u, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return &LoginResponse{
+		Token: tokenStr,
+		User:  u,
+	}, nil
+}
+
+func (s *authService) GetOnboardingStatus(ctx context.Context, userID, clientID string) (*OnboardingStatusResponse, error) {
+	completed, seenJSON, status, trialEnds, err := s.repo.GetOnboardingData(ctx, userID, clientID)
+	if err != nil {
+		return nil, err
+	}
+
+	var seen []string
+	if seenJSON != "" {
+		_ = json.Unmarshal([]byte(seenJSON), &seen)
+	}
+	if seen == nil {
+		seen = []string{}
+	}
+
+	daysRemaining := 0
+	if trialEnds != nil && time.Now().Before(*trialEnds) {
+		daysRemaining = int(time.Until(*trialEnds).Hours()/24) + 1
+	}
+
+	return &OnboardingStatusResponse{
+		CompletedOnboarding: completed,
+		SeenTutorials:       seen,
+		SubscriptionStatus:  status,
+		TrialEndsAt:         trialEnds,
+		DaysRemaining:       daysRemaining,
+	}, nil
+}
+
+func (s *authService) FinishWizard(ctx context.Context, userID, clientID string, req WizardOnboardingRequest) error {
+	if err := s.repo.CompleteOnboarding(ctx, userID, clientID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *authService) MarkTutorialSeen(ctx context.Context, userID, clientID, tutorialID string) ([]string, error) {
+	_, seenJSON, _, _, err := s.repo.GetOnboardingData(ctx, userID, clientID)
+	if err != nil {
+		return nil, err
+	}
+
+	var seen []string
+	if seenJSON != "" {
+		_ = json.Unmarshal([]byte(seenJSON), &seen)
+	}
+
+	alreadySeen := false
+	for _, id := range seen {
+		if id == tutorialID {
+			alreadySeen = true
+			break
+		}
+	}
+	if !alreadySeen {
+		seen = append(seen, tutorialID)
+		b, _ := json.Marshal(seen)
+		if err := s.repo.UpdateSeenTutorials(ctx, userID, clientID, string(b)); err != nil {
+			return nil, err
+		}
+	}
+
+	return seen, nil
+}
+
 
 

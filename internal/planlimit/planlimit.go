@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 
@@ -232,14 +234,30 @@ func RequireClientSelected(db *sqlx.DB) func(http.Handler) http.Handler {
 				return
 			}
 
-			var status string
-			query := "SELECT status FROM client WHERE id = ? LIMIT 1"
-			err := db.GetContext(r.Context(), &status, query, clientID)
-			if err == nil && status == "blocked" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				_, _ = w.Write([]byte(`{"error":"client_blocked","message":"Sua barbearia está suspensa ou bloqueada pelo administrador."}`))
-				return
+			var clientInfo struct {
+				Status             string     `db:"status"`
+				SubscriptionStatus string     `db:"subscription_status"`
+				TrialEndsAt        *time.Time `db:"trial_ends_at"`
+			}
+			query := "SELECT status, COALESCE(subscription_status, 'active') as subscription_status, trial_ends_at FROM client WHERE id = ? LIMIT 1"
+			err := db.GetContext(r.Context(), &clientInfo, query, clientID)
+			if err == nil {
+				if clientInfo.Status == "blocked" {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = w.Write([]byte(`{"error":"client_blocked","message":"Sua barbearia está suspensa ou bloqueada pelo administrador."}`))
+					return
+				}
+				// Verifica expiração do trial (permite apenas leitura do plano e rotas de auth/config basico)
+				if clientInfo.SubscriptionStatus == "trial" && clientInfo.TrialEndsAt != nil && time.Now().After(*clientInfo.TrialEndsAt) {
+					path := r.URL.Path
+					if !strings.HasSuffix(path, "/plan/usage") && !strings.Contains(path, "/auth/") {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusPaymentRequired)
+						_, _ = w.Write([]byte(`{"error":"trial_expired","message":"Seu período de testes grátis de 7 dias expirou. Escolha um plano para continuar."}`))
+						return
+					}
+				}
 			}
 			next.ServeHTTP(w, r)
 		})

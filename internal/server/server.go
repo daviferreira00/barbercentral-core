@@ -140,10 +140,15 @@ func New(db *sqlx.DB, cfg *config.Config) http.Handler {
 			r.Post("/auth/switch-client", authHandler.SwitchClient)
 			r.Get("/auth/my-clients", authHandler.MyClients)
 			r.Post("/auth/return-to-admin", authHandler.ReturnToAdmin)
+			r.Get("/auth/onboarding", authHandler.GetOnboardingStatus)
 
 			// Rotas de negócio — exigem barbearia ativa selecionada
 			r.Group(func(r chi.Router) {
 				r.Use(planlimit.RequireClientSelected(db))
+
+				// Onboarding Wizard & Tutoriais
+				r.Post("/auth/onboarding/wizard", authHandler.FinishWizard)
+				r.Post("/auth/tutorials/mark-seen", authHandler.MarkTutorialSeen)
 
 				// Configurações da barbearia
 				r.Get("/config", configHandler.GetConfig)

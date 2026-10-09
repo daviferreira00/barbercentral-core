@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"barbercentral-core/internal/shared"
 )
@@ -27,6 +28,7 @@ func NewAuthHandler(service AuthService) *AuthHandler {
 func (h *AuthHandler) RegisterRoutes(r chi.Router) {
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/login", h.Login)
+		r.Post("/register-trial", h.RegisterTrial)
 		r.Post("/magic-link", h.RequestMagicLink)
 		r.Post("/magic-link/verify", h.VerifyMagicLink)
 		r.Post("/password-reset", h.ForgotPassword)
@@ -439,5 +441,85 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	shared.RespondWithJSON(w, http.StatusOK, TokenResponse{Token: tokenStr})
 }
+
+func (h *AuthHandler) RegisterTrial(w http.ResponseWriter, r *http.Request) {
+	var req RegisterTrialRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido", err)
+		return
+	}
+
+	resp, err := h.service.RegisterTrial(r.Context(), req)
+	if err != nil {
+		log.Error().Err(err).Msg("Erro ao registrar trial de barbearia")
+		shared.RespondWithError(w, http.StatusBadRequest, err.Error(), err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusCreated, resp)
+}
+
+func (h *AuthHandler) GetOnboardingStatus(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value("user_id").(string)
+	clientID, _ := r.Context().Value("client_id").(string)
+
+	if userID == "" || clientID == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Sessão ou barbearia não selecionada", nil)
+		return
+	}
+
+	resp, err := h.service.GetOnboardingStatus(r.Context(), userID, clientID)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao buscar status de onboarding", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, resp)
+}
+
+func (h *AuthHandler) FinishWizard(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value("user_id").(string)
+	clientID, _ := r.Context().Value("client_id").(string)
+
+	if userID == "" || clientID == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Sessão ou barbearia não selecionada", nil)
+		return
+	}
+
+	var req WizardOnboardingRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if err := h.service.FinishWizard(r.Context(), userID, clientID, req); err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao finalizar wizard de onboarding", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (h *AuthHandler) MarkTutorialSeen(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value("user_id").(string)
+	clientID, _ := r.Context().Value("client_id").(string)
+
+	if userID == "" || clientID == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "Sessão ou barbearia não selecionada", nil)
+		return
+	}
+
+	var req MarkTutorialSeenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.TutorialID == "" {
+		shared.RespondWithError(w, http.StatusBadRequest, "ID do tutorial é obrigatório", err)
+		return
+	}
+
+	seen, err := h.service.MarkTutorialSeen(r.Context(), userID, clientID, req.TutorialID)
+	if err != nil {
+		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao atualizar tutoriais vistos", err)
+		return
+	}
+
+	shared.RespondWithJSON(w, http.StatusOK, map[string]interface{}{"seen_tutorials": seen})
+}
+
 
 

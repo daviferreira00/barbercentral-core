@@ -62,14 +62,17 @@ type AuthToken struct {
 // Representação unificada do usuário logado na sessão
 
 type Usuario struct {
-	ID                   string  `json:"id"`
-	ClientID             string  `json:"client_id,omitempty"`
-	Nome                 string  `json:"name"`
-	Email                string  `json:"email"`
-	Role                 string  `json:"role"` // admin, owner, manager, professional, receptionist, ou "" (aguardando seleção)
-	Impersonating        bool    `json:"impersonating,omitempty"`
-	NeedsClientSelection bool    `json:"needs_client_selection,omitempty"`
-	PhotoURL             *string `json:"photo_url,omitempty"`
+	ID                   string     `json:"id"`
+	ClientID             string     `json:"client_id,omitempty"`
+	Nome                 string     `json:"name"`
+	Email                string     `json:"email"`
+	Role                 string     `json:"role"` // admin, owner, manager, professional, receptionist, ou "" (aguardando seleção)
+	Impersonating        bool       `json:"impersonating,omitempty"`
+	NeedsClientSelection bool       `json:"needs_client_selection,omitempty"`
+	PhotoURL             *string    `json:"photo_url,omitempty"`
+	CompletedOnboarding  bool       `json:"completed_onboarding"`
+	SubscriptionStatus   string     `json:"subscription_status,omitempty"`
+	TrialEndsAt          *time.Time `json:"trial_ends_at,omitempty"`
 }
 
 // Structs de requisição e resposta para os endpoints de API
@@ -82,6 +85,35 @@ type LoginRequest struct {
 type LoginResponse struct {
 	Token string   `json:"token"`
 	User  *Usuario `json:"user"`
+}
+
+type RegisterTrialRequest struct {
+	BarberName string `json:"barber_name"`
+	Name       string `json:"name"`
+	Email      string `json:"email"`
+	Phone      string `json:"phone"`
+	Password   string `json:"password"`
+}
+
+type WizardOnboardingRequest struct {
+	BarberName  string  `json:"barber_name"`
+	Phone       string  `json:"phone"`
+	ServiceName string  `json:"service_name,omitempty"`
+	Price       float64 `json:"price,omitempty"`
+	Duration    int     `json:"duration,omitempty"`
+	OwnerName   string  `json:"owner_name,omitempty"`
+}
+
+type MarkTutorialSeenRequest struct {
+	TutorialID string `json:"tutorial_id"`
+}
+
+type OnboardingStatusResponse struct {
+	CompletedOnboarding bool       `json:"completed_onboarding"`
+	SeenTutorials       []string   `json:"seen_tutorials"`
+	SubscriptionStatus  string     `json:"subscription_status"`
+	TrialEndsAt         *time.Time `json:"trial_ends_at,omitempty"`
+	DaysRemaining       int        `json:"days_remaining"`
 }
 
 type MagicLinkRequest struct {
@@ -124,4 +156,5 @@ type UpdateProfileRequest struct {
 	Password    string `json:"password,omitempty"`
 	PhotoBase64 string `json:"photo_base64,omitempty"`
 }
+
 

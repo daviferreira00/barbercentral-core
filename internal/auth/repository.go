@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -35,6 +36,16 @@ type AuthRepository interface {
 	UpdateAdminPassword(ctx context.Context, id string, passwordHash string) error
 	UpdateUserPassword(ctx context.Context, id string, passwordHash string) error
 	GetClientStatus(ctx context.Context, clientID string) (string, error)
+
+	// Trial & Onboarding
+	GetDefaultTrialPlanID(ctx context.Context) (string, error)
+	RegisterTrialClient(ctx context.Context, clientID, planID, name, slug, phone string, trialEndsAt time.Time) error
+	CreateUserAccount(ctx context.Context, userID, name, email, passwordHash string) error
+	CreateClientUserLink(ctx context.Context, linkID, userID, clientID, role, status string) error
+	CreateDefaultClientConfig(ctx context.Context, clientID, phone string) error
+	GetOnboardingData(ctx context.Context, userID, clientID string) (completedOnboarding bool, seenTutorialsJSON string, subscriptionStatus string, trialEndsAt *time.Time, err error)
+	CompleteOnboarding(ctx context.Context, userID, clientID string) error
+	UpdateSeenTutorials(ctx context.Context, userID, clientID string, jsonStr string) error
 }
 
 type authRepository struct {
@@ -226,3 +237,107 @@ func (r *authRepository) UpdateUserProfile(ctx context.Context, id, name, email,
 	}
 	return err
 }
+
+func (r *authRepository) GetDefaultTrialPlanID(ctx context.Context) (string, error) {
+	var planID string
+	query := `SELECT id FROM plan WHERE id = 'plan-pro' OR name LIKE '%Pro%' ORDER BY (CASE WHEN id = 'plan-pro' THEN 1 WHEN name LIKE '%Pro%' THEN 2 ELSE 3 END) LIMIT 1`
+	err := r.db.GetContext(ctx, &planID, query)
+	if err != nil || planID == "" {
+		fallbackQuery := `SELECT id FROM plan LIMIT 1`
+		_ = r.db.GetContext(ctx, &planID, fallbackQuery)
+	}
+	if planID == "" {
+		planID = "plan-pro"
+	}
+	return planID, nil
+}
+
+func (r *authRepository) RegisterTrialClient(ctx context.Context, clientID, planID, name, slug, phone string, trialEndsAt time.Time) error {
+	query := `
+		INSERT INTO client (id, plan_id, name, slug, status, trial_ends_at, subscription_status, phone, created_at)
+		VALUES (?, ?, ?, ?, 'active', ?, 'trial', ?, NOW())
+	`
+	_, err := r.db.ExecContext(ctx, query, clientID, planID, name, slug, trialEndsAt, phone)
+	if err != nil {
+		// Fallback caso a tabela client ainda não possua trial_ends_at ou subscription_status ou phone
+		fallbackQuery := `
+			INSERT INTO client (id, plan_id, name, slug, status, created_at)
+			VALUES (?, ?, ?, ?, 'active', NOW())
+		`
+		_, err = r.db.ExecContext(ctx, fallbackQuery, clientID, planID, name, slug)
+	}
+	return err
+}
+
+func (r *authRepository) CreateUserAccount(ctx context.Context, userID, name, email, passwordHash string) error {
+	query := `
+		INSERT INTO user_account (id, name, email, password_hash, status, created_at)
+		VALUES (?, ?, ?, ?, 'active', NOW())
+	`
+	_, err := r.db.ExecContext(ctx, query, userID, name, email, passwordHash)
+	return err
+}
+
+func (r *authRepository) CreateClientUserLink(ctx context.Context, linkID, userID, clientID, role, status string) error {
+	query := `
+		INSERT INTO client_user_link (id, user_id, client_id, role, status, completed_onboarding, created_at)
+		VALUES (?, ?, ?, ?, ?, 0, NOW())
+	`
+	_, err := r.db.ExecContext(ctx, query, linkID, userID, clientID, role, status)
+	if err != nil {
+		fallbackQuery := `
+			INSERT INTO client_user_link (id, user_id, client_id, role, status, created_at)
+			VALUES (?, ?, ?, ?, ?, NOW())
+		`
+		_, err = r.db.ExecContext(ctx, fallbackQuery, linkID, userID, clientID, role, status)
+	}
+	return err
+}
+
+func (r *authRepository) CreateDefaultClientConfig(ctx context.Context, clientID, phone string) error {
+	query := `
+		INSERT INTO client_config (client_id, color_primary, color_secondary, timezone, cancellation_policy_hours, booking_requires_login, min_advance_hours, max_advance_days, interval_between_minutes, active, phone, whatsapp)
+		VALUES (?, '#0F172A', '#D97706', 'America/Sao_Paulo', 2, 0, 1, 30, 30, 1, ?, ?)
+		ON DUPLICATE KEY UPDATE phone = VALUES(phone), whatsapp = VALUES(whatsapp)
+	`
+	_, err := r.db.ExecContext(ctx, query, clientID, phone, phone)
+	return err
+}
+
+func (r *authRepository) GetOnboardingData(ctx context.Context, userID, clientID string) (completedOnboarding bool, seenTutorialsJSON string, subscriptionStatus string, trialEndsAt *time.Time, err error) {
+	var row struct {
+		CompletedOnboarding int        `db:"completed_onboarding"`
+		SeenTutorialsJSON   *string    `db:"seen_tutorials_json"`
+		SubscriptionStatus  string     `db:"subscription_status"`
+		TrialEndsAt         *time.Time `db:"trial_ends_at"`
+	}
+	query := `
+		SELECT cul.completed_onboarding, cul.seen_tutorials_json, c.subscription_status, c.trial_ends_at
+		FROM client_user_link cul
+		JOIN client c ON c.id = cul.client_id
+		WHERE cul.user_id = ? AND cul.client_id = ?
+		LIMIT 1
+	`
+	err = r.db.GetContext(ctx, &row, query, userID, clientID)
+	if err != nil {
+		return false, "", "active", nil, err
+	}
+	seen := ""
+	if row.SeenTutorialsJSON != nil {
+		seen = *row.SeenTutorialsJSON
+	}
+	return row.CompletedOnboarding == 1, seen, row.SubscriptionStatus, row.TrialEndsAt, nil
+}
+
+func (r *authRepository) CompleteOnboarding(ctx context.Context, userID, clientID string) error {
+	query := `UPDATE client_user_link SET completed_onboarding = 1 WHERE user_id = ? AND client_id = ?`
+	_, err := r.db.ExecContext(ctx, query, userID, clientID)
+	return err
+}
+
+func (r *authRepository) UpdateSeenTutorials(ctx context.Context, userID, clientID string, jsonStr string) error {
+	query := `UPDATE client_user_link SET seen_tutorials_json = ? WHERE user_id = ? AND client_id = ?`
+	_, err := r.db.ExecContext(ctx, query, jsonStr, userID, clientID)
+	return err
+}
+

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -106,7 +107,7 @@ func (h *ConfigHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 func (h *ConfigHandler) UploadLogo(w http.ResponseWriter, r *http.Request) {
 	clientID, _ := r.Context().Value("client_id").(string)
 
-	err := r.ParseMultipartForm(5 * 1024 * 1024) // 5MB limit
+	err := r.ParseMultipartForm(15 * 1024 * 1024) // 15MB limit
 	if err != nil {
 		shared.RespondWithError(w, http.StatusBadRequest, "Arquivo inválido ou muito grande", err)
 		return
@@ -121,7 +122,24 @@ func (h *ConfigHandler) UploadLogo(w http.ResponseWriter, r *http.Request) {
 
 	_ = os.MkdirAll(shared.GetUploadsDir(), 0755)
 
-	ext := filepath.Ext(header.Filename)
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if ext == "" {
+		ct := strings.ToLower(header.Header.Get("Content-Type"))
+		switch {
+		case strings.Contains(ct, "png"):
+			ext = ".png"
+		case strings.Contains(ct, "jpeg"), strings.Contains(ct, "jpg"):
+			ext = ".jpg"
+		case strings.Contains(ct, "webp"):
+			ext = ".webp"
+		case strings.Contains(ct, "svg"):
+			ext = ".svg"
+		case strings.Contains(ct, "gif"):
+			ext = ".gif"
+		default:
+			ext = ".png"
+		}
+	}
 	filename := fmt.Sprintf("logo_%s_%d%s", clientID, time.Now().Unix(), ext)
 	outPath := filepath.Join(shared.GetUploadsDir(), filename)
 
@@ -151,7 +169,7 @@ func (h *ConfigHandler) UploadLogo(w http.ResponseWriter, r *http.Request) {
 func (h *ConfigHandler) UploadLogoCentral(w http.ResponseWriter, r *http.Request) {
 	clientID, _ := r.Context().Value("client_id").(string)
 
-	err := r.ParseMultipartForm(5 * 1024 * 1024) // 5MB limit
+	err := r.ParseMultipartForm(15 * 1024 * 1024) // 15MB limit
 	if err != nil {
 		shared.RespondWithError(w, http.StatusBadRequest, "Arquivo inválido ou muito grande", err)
 		return
@@ -166,7 +184,24 @@ func (h *ConfigHandler) UploadLogoCentral(w http.ResponseWriter, r *http.Request
 
 	_ = os.MkdirAll(shared.GetUploadsDir(), 0755)
 
-	ext := filepath.Ext(header.Filename)
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if ext == "" {
+		ct := strings.ToLower(header.Header.Get("Content-Type"))
+		switch {
+		case strings.Contains(ct, "png"):
+			ext = ".png"
+		case strings.Contains(ct, "jpeg"), strings.Contains(ct, "jpg"):
+			ext = ".jpg"
+		case strings.Contains(ct, "webp"):
+			ext = ".webp"
+		case strings.Contains(ct, "svg"):
+			ext = ".svg"
+		case strings.Contains(ct, "gif"):
+			ext = ".gif"
+		default:
+			ext = ".png"
+		}
+	}
 	filename := fmt.Sprintf("logo_central_%s_%d%s", clientID, time.Now().Unix(), ext)
 	outPath := filepath.Join(shared.GetUploadsDir(), filename)
 

@@ -777,7 +777,7 @@ func (s *authService) GetOnboardingStatus(ctx context.Context, userID, clientID 
 	}
 
 	daysRemaining := 0
-	if trialEnds != nil && time.Now().Before(*trialEnds) {
+	if status == "trial" && trialEnds != nil && time.Now().Before(*trialEnds) {
 		daysRemaining = int(time.Until(*trialEnds).Hours()/24) + 1
 	}
 

@@ -21,6 +21,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    volumes:
+      - barbercentral-core-uploads:/app/uploads
     deploy:
       replicas: 1
       restart_policy:
@@ -30,3 +32,4 @@ services:
 
 volumes:
   barbercentral-db-data-prod:
+  barbercentral-core-uploads:

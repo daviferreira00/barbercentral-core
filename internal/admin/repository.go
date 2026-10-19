@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -270,7 +271,32 @@ func (r *adminRepository) ListPlans(ctx context.Context) ([]planlimit.Plan, erro
 	var list []planlimit.Plan
 	query := "SELECT * FROM plan ORDER BY price ASC"
 	err := r.db.SelectContext(ctx, &list, query)
-	return list, err
+	if err != nil {
+		return nil, err
+	}
+
+	// Deduplica planos com mesmo nome (ex: legados de migração), dando preferência aos IDs canônicos ("plan-smart", "plan-pro")
+	uniqueMap := make(map[string]planlimit.Plan)
+	var orderedKeys []string
+
+	for _, p := range list {
+		key := strings.ToLower(strings.TrimSpace(p.Name))
+		existing, found := uniqueMap[key]
+		if !found {
+			uniqueMap[key] = p
+			orderedKeys = append(orderedKeys, key)
+		} else if strings.HasPrefix(p.ID, "plan-") && !strings.HasPrefix(existing.ID, "plan-") {
+			// Substitui pelo ID canônico oficial
+			uniqueMap[key] = p
+		}
+	}
+
+	deduped := make([]planlimit.Plan, 0, len(orderedKeys))
+	for _, k := range orderedKeys {
+		deduped = append(deduped, uniqueMap[k])
+	}
+
+	return deduped, nil
 }
 
 func (r *adminRepository) CreatePlan(ctx context.Context, p *planlimit.Plan) error {

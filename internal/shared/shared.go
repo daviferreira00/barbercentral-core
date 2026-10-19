@@ -26,5 +26,9 @@ func GetUploadsDir() string {
 	if dir != "" {
 		return dir
 	}
+	if stat, err := os.Stat("/app"); err == nil && stat.IsDir() {
+		return "/app/uploads"
+	}
 	return "../barbercentral-front/public/uploads"
 }
+

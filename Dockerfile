@@ -31,7 +31,7 @@ WORKDIR /app
 COPY --from=builder /build/barbercentral-backend .
 COPY --from=builder /build/migrations ./migrations
 
-RUN chown -R app:app /app
+RUN mkdir -p /app/uploads && chown -R app:app /app
 USER app
 
 EXPOSE 8080

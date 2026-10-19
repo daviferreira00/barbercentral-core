@@ -427,8 +427,8 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 				pathStr := fmt.Sprintf("/uploads/%s", filename)
 				photoURL = &pathStr
 			}
-		} else if strings.HasPrefix(req.PhotoBase64, "/uploads/") {
-			pathStr := req.PhotoBase64
+		} else if idx := strings.Index(req.PhotoBase64, "/uploads/"); idx != -1 {
+			pathStr := req.PhotoBase64[idx:]
 			photoURL = &pathStr
 		}
 	}

@@ -231,12 +231,16 @@ func (h *ProfessionalHandler) UploadPhoto(w http.ResponseWriter, r *http.Request
 			shared.RespondWithError(w, http.StatusBadRequest, "Campo photo_url é obrigatório", nil)
 			return
 		}
-		err := h.service.UpdatePhoto(r.Context(), clientID, id, req.PhotoURL)
+		photoURL := req.PhotoURL
+		if idx := strings.Index(photoURL, "/uploads/"); idx != -1 {
+			photoURL = photoURL[idx:]
+		}
+		err := h.service.UpdatePhoto(r.Context(), clientID, id, photoURL)
 		if err != nil {
 			shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao associar foto ao profissional", err)
 			return
 		}
-		shared.RespondWithJSON(w, http.StatusOK, map[string]string{"photo_url": req.PhotoURL})
+		shared.RespondWithJSON(w, http.StatusOK, map[string]string{"photo_url": photoURL})
 		return
 	}
 

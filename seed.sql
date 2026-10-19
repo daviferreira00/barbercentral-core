@@ -42,8 +42,6 @@ SET FOREIGN_KEY_CHECKS = 1;
 INSERT INTO plan (id, name, max_professionals, max_customers, billing_type, price, features_json, max_users, has_loyalty, has_stock, has_reports, has_online_booking, has_whatsapp, is_public) VALUES
 ('plan-smart',                           'Smart',        3,    -1,     'monthly',  79.90,  '{"agenda":true,"caixa":true,"crm_basico":true,"whatsapp":false,"fidelidade":false,"relatorios":false}', 3, 0, 0, 0, 1, 0, 1),
 ('plan-pro',                             'Pro',         -1,    -1,     'monthly', 149.90,  '{"agenda":true,"caixa":true,"crm_basico":true,"whatsapp":true,"fidelidade":true,"relatorios":true,"estoque":true}', -1, 1, 1, 1, 1, 1, 1),
-('p1a00001-smart-47cd-95c5-barber000001', 'Smart',        3,    -1,     'monthly',  79.90,  '{"agenda":true,"caixa":true,"crm_basico":true,"whatsapp":false,"fidelidade":false,"relatorios":false}', 3, 0, 0, 0, 1, 0, 1),
-('p1a00002-pro000-47cd-95c5-barber000002', 'Pro',         -1,    -1,     'monthly', 149.90,  '{"agenda":true,"caixa":true,"crm_basico":true,"whatsapp":true,"fidelidade":true,"relatorios":true,"estoque":true}', -1, 1, 1, 1, 1, 1, 1),
 ('plan-basico',                          'Básico',       2,   200,     'monthly',   0.00,  '{"agenda":true,"whatsapp":false}', 2, 0, 0, 0, 1, 0, 0),
 ('plan-profissional',                    'Profissional', 5,   500,     'monthly',  99.00,  '{"agenda":true,"whatsapp":true,"financeiro":true}', 5, 1, 1, 1, 1, 1, 0),
 ('plan-premium',                         'Premium',    9999, 999999,   'monthly', 199.00,  '{"agenda":true,"whatsapp":true,"financeiro":true,"fidelidade":true}', 9999, 1, 1, 1, 1, 1, 0);

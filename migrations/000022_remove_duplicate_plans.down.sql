@@ -1,0 +1,1 @@
+-- Rollback da Migration 000022 (nenhuma ação necessária)

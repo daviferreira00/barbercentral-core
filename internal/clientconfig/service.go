@@ -3,6 +3,7 @@ package clientconfig
 import (
 	"context"
 	"errors"
+	"strings"
 )
 
 type ConfigService interface {
@@ -25,6 +26,24 @@ func NewConfigService(repo ConfigRepository) ConfigService {
 	return &configService{repo: repo}
 }
 
+func cleanUploadURL(url *string) *string {
+	if url == nil {
+		return nil
+	}
+	val := *url
+	if idx := strings.Index(val, "/uploads/"); idx != -1 {
+		val = val[idx:]
+	}
+	return &val
+}
+
+func cleanUploadURLString(url string) string {
+	if idx := strings.Index(url, "/uploads/"); idx != -1 {
+		return url[idx:]
+	}
+	return url
+}
+
 func (s *configService) GetByClientID(ctx context.Context, clientID string) (*ClientConfig, error) {
 	return s.repo.GetByClientID(ctx, clientID)
 }
@@ -32,8 +51,8 @@ func (s *configService) GetByClientID(ctx context.Context, clientID string) (*Cl
 func (s *configService) Update(ctx context.Context, clientID string, req UpdateConfigRequest) (*ClientConfig, error) {
 	cfg := &ClientConfig{
 		ClientID:                 clientID,
-		LogoURL:                  req.LogoURL,
-		LogoCentral:              req.LogoCentral,
+		LogoURL:                  cleanUploadURL(req.LogoURL),
+		LogoCentral:              cleanUploadURL(req.LogoCentral),
 		ColorPrimary:             req.ColorPrimary,
 		ColorSecondary:           req.ColorSecondary,
 		ColorButton:              req.ColorButton,
@@ -86,11 +105,11 @@ func (s *configService) GetBySlug(ctx context.Context, slug string) (*PublicClie
 }
 
 func (s *configService) UpdateLogo(ctx context.Context, clientID, logoURL string) error {
-	return s.repo.UpdateLogo(ctx, clientID, logoURL)
+	return s.repo.UpdateLogo(ctx, clientID, cleanUploadURLString(logoURL))
 }
 
 func (s *configService) UpdateLogoCentral(ctx context.Context, clientID, logoURL string) error {
-	return s.repo.UpdateLogoCentral(ctx, clientID, logoURL)
+	return s.repo.UpdateLogoCentral(ctx, clientID, cleanUploadURLString(logoURL))
 }
 
 func (s *configService) GetBrandingByClientID(ctx context.Context, clientID string) (*PublicClientData, error) {

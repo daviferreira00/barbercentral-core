@@ -253,7 +253,12 @@ func (h *AdminHandler) UpdateClientPlan(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err := h.service.UpdateClientPlan(r.Context(), id, req.PlanID)
+	subStatus := "active"
+	if req.SubscriptionStatus != nil && *req.SubscriptionStatus != "" {
+		subStatus = *req.SubscriptionStatus
+	}
+
+	err := h.service.UpdateClientPlan(r.Context(), id, req.PlanID, subStatus)
 	if err != nil {
 		shared.RespondWithError(w, http.StatusInternalServerError, "Erro ao alterar plano do cliente", err)
 		return

@@ -65,7 +65,8 @@ type BlockRequest struct {
 }
 
 type UpdatePlanRequest struct {
-	PlanID string `json:"plan_id"`
+	PlanID             string  `json:"plan_id"`
+	SubscriptionStatus *string `json:"subscription_status,omitempty"`
 }
 
 // UpdateClientUserRequest atualiza um vínculo específico (identificado por

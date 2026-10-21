@@ -23,7 +23,7 @@ type AdminService interface {
 	UnblockClient(ctx context.Context, id string) error
 	BlockClientWithReason(ctx context.Context, id, reason, performedBy string) error
 	UnblockClientWithReason(ctx context.Context, id, reason, performedBy string) error
-	UpdateClientPlan(ctx context.Context, id, planID string) error
+	UpdateClientPlan(ctx context.Context, id, planID, subscriptionStatus string) error
 	ListClientUsers(ctx context.Context, clientID string) ([]ClientUser, error)
 	CreateClientUser(ctx context.Context, clientID string, req CreateClientUserRequest) (*ClientUser, error)
 	UpdateClientUser(ctx context.Context, userID string, req UpdateClientUserRequest) error
@@ -123,8 +123,11 @@ func (s *adminService) UnblockClientWithReason(ctx context.Context, id, reason, 
 	return s.repo.CreateBlockLog(ctx, logID, id, "unblock", reason, performedBy)
 }
 
-func (s *adminService) UpdateClientPlan(ctx context.Context, id, planID string) error {
-	return s.repo.UpdateClientPlan(ctx, id, planID)
+func (s *adminService) UpdateClientPlan(ctx context.Context, id, planID, subscriptionStatus string) error {
+	if subscriptionStatus == "" {
+		subscriptionStatus = "active"
+	}
+	return s.repo.UpdateClientPlan(ctx, id, planID, subscriptionStatus)
 }
 
 func (s *adminService) ListClientUsers(ctx context.Context, clientID string) ([]ClientUser, error) {

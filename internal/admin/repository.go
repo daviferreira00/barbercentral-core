@@ -35,7 +35,7 @@ type AdminRepository interface {
 	UpdateClientUserLink(ctx context.Context, linkID string, req UpdateClientUserRequest) error
 	DeleteClientUserLink(ctx context.Context, linkID string) error
 
-	UpdateClientPlan(ctx context.Context, id, planID string) error
+	UpdateClientPlan(ctx context.Context, id, planID, subscriptionStatus string) error
 	CreateBlockLog(ctx context.Context, id, clientID, action, reason, performedBy string) error
 	ListPlans(ctx context.Context) ([]planlimit.Plan, error)
 	CreatePlan(ctx context.Context, p *planlimit.Plan) error
@@ -259,9 +259,12 @@ func (r *adminRepository) DeleteClientUserLink(ctx context.Context, linkID strin
 	return nil
 }
 
-func (r *adminRepository) UpdateClientPlan(ctx context.Context, id, planID string) error {
-	query := "UPDATE client SET plan_id = ? WHERE id = ?"
-	_, err := r.db.ExecContext(ctx, query, planID, id)
+func (r *adminRepository) UpdateClientPlan(ctx context.Context, id, planID, subscriptionStatus string) error {
+	if subscriptionStatus == "" {
+		subscriptionStatus = "active"
+	}
+	query := "UPDATE client SET plan_id = ?, subscription_status = ? WHERE id = ?"
+	_, err := r.db.ExecContext(ctx, query, planID, subscriptionStatus, id)
 	return err
 }
 

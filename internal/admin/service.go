@@ -56,15 +56,17 @@ func (s *adminService) GetClientByID(ctx context.Context, id string) (*Client, e
 }
 
 func (s *adminService) CreateClient(ctx context.Context, req CreateClientRequest) (*Client, error) {
+	subStatus := "active"
 	c := &Client{
-		ID:           uuid.New().String(),
-		PlanID:       req.PlanID,
-		Name:         req.Name,
-		Slug:         req.Slug,
-		CustomDomain: req.CustomDomain,
-		Status:       "active",
-		Phone:        req.Phone,
-		CreatedAt:    time.Now(),
+		ID:                 uuid.New().String(),
+		PlanID:             req.PlanID,
+		Name:               req.Name,
+		Slug:               req.Slug,
+		CustomDomain:       req.CustomDomain,
+		Status:             "active",
+		SubscriptionStatus: &subStatus,
+		Phone:              req.Phone,
+		CreatedAt:          time.Now(),
 	}
 
 	err := s.repo.CreateClient(ctx, c)

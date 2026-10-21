@@ -3,14 +3,16 @@ package admin
 import "time"
 
 type Client struct {
-	ID           string    `json:"id" db:"id"`
-	PlanID       string    `json:"plan_id" db:"plan_id"`
-	Name         string    `json:"name" db:"name"`
-	Slug         string    `json:"slug" db:"slug"`
-	CustomDomain *string   `json:"custom_domain" db:"custom_domain"`
-	Status       string    `json:"status" db:"status"` // active, blocked
-	Phone        *string   `json:"phone,omitempty" db:"phone"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	ID                 string     `json:"id" db:"id"`
+	PlanID             string     `json:"plan_id" db:"plan_id"`
+	Name               string     `json:"name" db:"name"`
+	Slug               string     `json:"slug" db:"slug"`
+	CustomDomain       *string    `json:"custom_domain" db:"custom_domain"`
+	Status             string     `json:"status" db:"status"` // active, blocked
+	TrialEndsAt        *time.Time `json:"trial_ends_at,omitempty" db:"trial_ends_at"`
+	SubscriptionStatus *string    `json:"subscription_status,omitempty" db:"subscription_status"`
+	Phone              *string    `json:"phone,omitempty" db:"phone"`
+	CreatedAt          time.Time  `json:"created_at" db:"created_at"`
 }
 
 // ClientUser representa 1 VÍNCULO (client_user_link), não mais 1 usuário 1:1.

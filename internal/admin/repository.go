@@ -54,7 +54,7 @@ type adminRepository struct {
 }
 
 func NewAdminRepository(db *sqlx.DB) AdminRepository {
-	return &adminRepository{db: db}
+	return &adminRepository{db: db.Unsafe()}
 }
 
 func (r *adminRepository) GetDB() *sqlx.DB {
@@ -62,7 +62,7 @@ func (r *adminRepository) GetDB() *sqlx.DB {
 }
 
 func (r *adminRepository) ListClients(ctx context.Context) ([]Client, error) {
-	var list []Client
+	list := make([]Client, 0)
 	query := "SELECT * FROM client ORDER BY name ASC"
 	err := r.db.SelectContext(ctx, &list, query)
 	return list, err
@@ -82,9 +82,14 @@ func (r *adminRepository) GetClientByID(ctx context.Context, id string) (*Client
 }
 
 func (r *adminRepository) CreateClient(ctx context.Context, c *Client) error {
-	query := `INSERT INTO client (id, plan_id, name, slug, custom_domain, status, phone, created_at)
-	          VALUES (:id, :plan_id, :name, :slug, :custom_domain, :status, :phone, :created_at)`
+	query := `INSERT INTO client (id, plan_id, name, slug, custom_domain, status, trial_ends_at, subscription_status, phone, created_at)
+	          VALUES (:id, :plan_id, :name, :slug, :custom_domain, :status, :trial_ends_at, :subscription_status, :phone, :created_at)`
 	_, err := r.db.NamedExecContext(ctx, query, c)
+	if err != nil {
+		fallbackQuery := `INSERT INTO client (id, plan_id, name, slug, custom_domain, status, phone, created_at)
+		                  VALUES (:id, :plan_id, :name, :slug, :custom_domain, :status, :phone, :created_at)`
+		_, err = r.db.NamedExecContext(ctx, fallbackQuery, c)
+	}
 	return err
 }
 
